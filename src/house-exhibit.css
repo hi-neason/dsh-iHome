@@ -1,56 +1,79 @@
 .ih-house-exhibit {
+  position: relative;
   width: 100%;
   height: 100%;
   min-width: 0;
   pointer-events: none;
   isolation: isolate;
 }
-.ih-house-exhibit svg {
+.ih-renovation-stage {
+  --ih-stage-delay: calc(var(--ih-renovation-cycle) / 6 * var(--ih-stage-index));
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  justify-items: center;
+}
+.ih-renovation-image {
   display: block;
   width: 100%;
   height: 100%;
-  overflow: visible;
+  min-height: 0;
+  object-fit: contain;
+  user-select: none;
 }
-.ih-house-roof {
-  animation: ih-house-assemble 8s cubic-bezier(.45, 0, .25, 1) infinite;
+.ih-renovation-caption {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+  letter-spacing: .04em;
+  color: #f2f5eb;
 }
-.ih-house-room {
-  animation: ih-house-room-float 8s cubic-bezier(.45, 0, .25, 1) infinite;
+.ih-renovation-count {
+  font: 10px/1.5 "SFMono-Regular", Consolas, monospace;
+  letter-spacing: .07em;
+  color: #b8cabe;
 }
-.ih-house-light {
-  stroke-dasharray: 22 78;
-  animation: ih-house-light-travel 4s linear infinite;
+
+/* The shell stays behind the installation layers, including the end-of-loop dissolve. */
+.ih-renovation-stage:not(:first-of-type) .ih-renovation-image,
+.ih-renovation-caption { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .ih-renovation-stage:not(:first-of-type) .ih-renovation-image {
+    animation: ih-install-layer var(--ih-renovation-cycle) ease-in-out var(--ih-stage-delay) infinite;
+  }
+  .ih-renovation-stage:last-child .ih-renovation-image { animation-name: ih-finish-room; }
+  .ih-renovation-caption {
+    animation: ih-renovation-caption var(--ih-renovation-cycle) step-end var(--ih-stage-delay) infinite;
+  }
+  .ih-hub-hero[data-paused='true'] .ih-house-exhibit :is(.ih-renovation-image, .ih-renovation-caption) {
+    animation-play-state: paused;
+  }
 }
-.ih-house-beacon {
-  animation: ih-house-beacon-glow 3s ease-in-out infinite;
+/* Each stage occupies 1/6 of the cycle. Keep it painted beneath the next 4% reveal. */
+@keyframes ih-install-layer {
+  0% { opacity: 0; clip-path: inset(var(--ih-entry-inset)); }
+  4%, 20.7% { opacity: 1; clip-path: inset(0); }
+  20.8%, 100% { opacity: 0; clip-path: inset(0); }
 }
-.ih-house-rays {
-  animation: ih-house-rays-reveal 8s ease-in-out infinite;
+@keyframes ih-finish-room {
+  0% { opacity: 0; }
+  4%, 13.2% { opacity: 1; }
+  16.666%, 100% { opacity: 0; }
 }
-@keyframes ih-house-assemble {
-  0%, 16%, 100% { transform: translateY(0); }
-  40%, 68% { transform: translateY(-23px); }
-}
-@keyframes ih-house-room-float {
-  0%, 16%, 100% { transform: translateY(0); }
-  40%, 68% { transform: translateY(-5px); }
-}
-@keyframes ih-house-light-travel {
-  from { stroke-dashoffset: 0; }
-  to { stroke-dashoffset: -100; }
-}
-@keyframes ih-house-beacon-glow {
-  0%, 100% { opacity: .35; }
-  50% { opacity: 1; }
-}
-@keyframes ih-house-rays-reveal {
-  0%, 16%, 100% { opacity: 0; }
-  40%, 68% { opacity: .4; }
-}
-.ih-hub-hero[data-paused='true'] .ih-house-exhibit * {
-  animation-play-state: paused;
+@keyframes ih-renovation-caption {
+  0% { opacity: 1; }
+  16.666%, 100% { opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ih-house-exhibit * { animation: none; }
-  .ih-house-rays { opacity: 0; }
+  .ih-renovation-stage .ih-renovation-image { visibility: hidden; }
+  .ih-renovation-stage:last-child .ih-renovation-image,
+  .ih-renovation-stage:last-child .ih-renovation-caption { visibility: visible; opacity: 1; }
+}
+@container ihome (max-width: 600px) {
+  .ih-renovation-caption { gap: 5px; font-size: 10px; }
+  .ih-renovation-count { font-size: 9px; }
 }

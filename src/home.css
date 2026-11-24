@@ -52,17 +52,20 @@
   outline-offset: 3px;
 }
 .ih-page {
+  --ih-gutter: clamp(16px, 3.5cqi, 52px);
   max-width: 1430px;
   margin: 0 auto;
-  padding: 0 clamp(16px, 3.5cqi, 52px) clamp(28px, 4cqi, 60px);
+  padding: 0 var(--ih-gutter) clamp(28px, 4cqi, 60px);
 }
-html[data-platform='darwin'] .ih-page { padding-top: var(--dsh-frame-top-clearance, 0px); }
 .ih-page-hub { display: flex; flex-direction: column; min-height: 100%; padding-bottom: 20px; }
 
 .ih-masthead {
   display: flex;
   align-items: center;
   min-height: clamp(54px, 5.6cqi, 73px);
+}
+html[data-platform='darwin'] .ih-masthead {
+  padding-inline-start: max(0px, calc(var(--dsh-frame-leading-clearance, 0px) - var(--ih-gutter)));
 }
 .ih-brand { display: flex; align-items: center; gap: 8px; color: var(--ih-ink); }
 .ih-brand span { font: 650 29px/.9 "DM Sans", "Helvetica Neue", sans-serif; letter-spacing: -.073em; }
@@ -90,6 +93,7 @@ html[data-platform='darwin'] .ih-page { padding-top: var(--dsh-frame-top-clearan
 .ih-author a:hover, .ih-author a:focus-visible { color: var(--ih-ink); text-decoration-color: currentColor; }
 
 .ih-hub-hero {
+  --ih-renovation-cycle: 6s;
   position: relative;
   isolation: isolate;
   display: grid;
@@ -136,7 +140,7 @@ html[data-platform='darwin'] .ih-page { padding-top: var(--dsh-frame-top-clearan
   font-weight: 620; letter-spacing: -.048em; line-height: 1.19;
 }
 .ih-hub-intro p { margin: clamp(10px, 1.3cqi, 19px) 0 0; color: #d0dcd2; font-size: clamp(13px, 1.18cqi, 16px); line-height: 1.82; }
-.ih-hub-exhibit { position: absolute; z-index: -1; inset: -6% 2.5% 0 47%; }
+.ih-hub-exhibit { position: absolute; z-index: -1; inset: 2% 2.5% 4% 47%; }
 .ih-motion-toggle {
   position: absolute; right: 13px; bottom: 13px;
   width: 32px; height: 32px; display: grid; place-items: center;
@@ -206,7 +210,7 @@ html[data-platform='darwin'] .ih-page { padding-top: var(--dsh-frame-top-clearan
 @keyframes ih-caustic { from { transform: translate(-1%, -4%) rotate(-19deg); } to { transform: translate(4%, 8%) rotate(-10deg); } }
 @media (prefers-reduced-motion: no-preference) {
   .ih-hub-hero:not([data-paused="true"]) .ih-hub-exhibit { transform: translate3d(var(--ih-pan-x, 0px), var(--ih-pan-y, 0px), 0); transition: transform .28s ease-out; }
-  .ih-hub-light::before, .ih-hub-light::after { animation: ih-caustic 8s ease-in-out infinite alternate; }
+  .ih-hub-light::before, .ih-hub-light::after { animation: ih-caustic calc(var(--ih-renovation-cycle) / 2) ease-in-out infinite alternate; }
   .ih-hub-light::after { animation-delay: -5s; }
   .ih-hub-hero[data-paused='true'] .ih-hub-light::before, .ih-hub-hero[data-paused='true'] .ih-hub-light::after { animation-play-state: paused; }
   .ih-tile { animation: ih-view-in .46s cubic-bezier(.22,.7,.25,1) backwards; animation-delay: calc(var(--ih-order) * 38ms); transition: border-color .2s, box-shadow .2s, transform .25s; }
@@ -229,7 +233,7 @@ html[data-platform='darwin'] .ih-page { padding-top: var(--dsh-frame-top-clearan
   .ih-hub-hero { min-height: 166px; }
 }
 @container ihome (max-width: 600px) {
-  .ih-page { padding-inline: 16px; }
+  .ih-page { --ih-gutter: 16px; }
   .ih-masthead { min-height: 53px; }
   .ih-brand span { font-size: 26px; }
   .ih-brand svg { width: 26px; height: 26px; }
@@ -237,8 +241,8 @@ html[data-platform='darwin'] .ih-page { padding-top: var(--dsh-frame-top-clearan
   .ih-hub-intro { padding: 18px 0 18px 16px; }
   .ih-hub-intro h1 { font-size: clamp(24px, 5.2cqi, 32px); }
   .ih-hub-intro p { font-size: 12px; line-height: 1.65; }
-  .ih-hub-exhibit { inset: 3% -4% 9% 54%; }
-  .ih-motion-toggle { width: 24px; height: 24px; right: 7px; bottom: 7px; }
+  .ih-hub-exhibit { inset: 5% 1% 8% 54%; }
+  .ih-motion-toggle { width: 24px; height: 24px; right: 7px; top: 7px; bottom: auto; }
   .ih-motion-toggle svg { width: 12px; height: 12px; }
   .ih-tile { flex-direction: column; align-items: stretch; min-height: 0; }
   .ih-tile-art { flex: none; max-width: none; height: 72px; margin: 6px 9px 0; }
@@ -248,7 +252,7 @@ html[data-platform='darwin'] .ih-page { padding-top: var(--dsh-frame-top-clearan
 }
 @container ihome (max-width: 335px) {
   .ih-hub-intro p { max-width: 13em; }
-  .ih-hub-exhibit { inset: 12% -10% 8% 55%; }
+  .ih-hub-exhibit { inset: 9% -1% 12% 55%; }
   .ih-tiles { grid-template-columns: 1fr; }
   .ih-tile { flex-direction: row-reverse; align-items: center; }
   .ih-tile-art { flex: 0 0 28%; height: 73px; }
