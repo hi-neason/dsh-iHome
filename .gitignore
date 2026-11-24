@@ -1,0 +1,5 @@
+node_modules/
+dist/
+*.tgz
+.omx/
+/docs/requirements.md
