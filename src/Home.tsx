@@ -1,29 +1,9 @@
-import { useLayoutEffect, useRef, useState } from 'react'
-import type { CSSProperties, PointerEvent } from 'react'
+import { useState } from 'react'
+import type { PointerEvent } from 'react'
 import { GitHubIcon, XiaohongshuIcon } from './AuthorIcons'
 import { HouseExhibit } from './HouseExhibit'
-import { ModuleDetail } from './ModuleDetail'
-import { modules, type ModuleId } from './modules'
-import archiveArt from './assets/modules/archive.webp'
-import knowledgeArt from './assets/modules/knowledge.webp'
-import designArt from './assets/modules/design.webp'
-import materialsArt from './assets/modules/materials.webp'
-import quotesArt from './assets/modules/quotes.webp'
-import budgetArt from './assets/modules/budget.webp'
-import siteArt from './assets/modules/site.webp'
-import handoverArt from './assets/modules/handover.webp'
+import { ModuleTiles, type OpenModule } from './ModuleTiles'
 import homeCss from './home.css'
-
-const artwork: Record<ModuleId, { src: string, tint: string }> = {
-  archive: { src: archiveArt, tint: '#58b298' },
-  knowledge: { src: knowledgeArt, tint: '#a4aebc' },
-  design: { src: designArt, tint: '#b49377' },
-  materials: { src: materialsArt, tint: '#b9a06c' },
-  quotes: { src: quotesArt, tint: '#a29ab5' },
-  budget: { src: budgetArt, tint: '#cd9944' },
-  site: { src: siteArt, tint: '#c28b72' },
-  handover: { src: handoverArt, tint: '#7aa2ab' },
-}
 
 function StudioMark() {
   return (
@@ -66,90 +46,28 @@ function HubHero({ paused, onToggle }: { paused: boolean, onToggle: () => void }
   )
 }
 
-export function Home({ onAsk }: { onAsk: (prompt: string) => void }) {
-  const [active, setActive] = useState<ModuleId | null>(null)
+export function Home({ onOpenModule }: { onOpenModule: OpenModule }) {
   const [paused, setPaused] = useState(false)
-  const panel = useRef<HTMLElement>(null)
-  const detailHeading = useRef<HTMLHeadingElement>(null)
-  const rememberedTile = useRef<{ id: ModuleId, scroll: number } | null>(null)
-  const selected = modules.find(module => module.id === active)
-
-  function openModule(id: ModuleId) {
-    rememberedTile.current = { id, scroll: panel.current?.scrollTop ?? 0 }
-    setActive(id)
-  }
-
-  useLayoutEffect(() => {
-    const root = panel.current
-    if (!root) return
-    if (active) {
-      root.scrollTop = 0
-      detailHeading.current?.focus({ preventScroll: true })
-    } else if (rememberedTile.current) {
-      const { id, scroll } = rememberedTile.current
-      root.scrollTop = scroll
-      root.querySelector<HTMLButtonElement>(`[data-module="${id}"]`)?.focus({ preventScroll: true })
-    }
-  }, [active])
-
-  return (
-    <section className="ih-home" lang="zh-CN" aria-label="iHome 装修工作台" ref={panel}
-      onKeyDown={event => {
-        if (active && event.key === 'Escape' && !event.defaultPrevented && !event.nativeEvent.isComposing) {
-          event.stopPropagation()
-          setActive(null)
-        }
-      }}>
-      <style>{homeCss}</style>
-      <div className={selected ? 'ih-page' : 'ih-page ih-page-hub'}>
-        <header className="ih-masthead">
-          <div className="ih-brand"><StudioMark /><span>iHome</span></div>
-        </header>
-        {selected ? (
-          <div className="ih-detail-header">
-            <button className="ih-back" type="button" onClick={() => setActive(null)}>
-              <span aria-hidden="true">←</span> 返回工作台
-            </button>
-            <div className="ih-detail-title">
-              <h1 tabIndex={-1} ref={detailHeading}>{selected.title}</h1>
-              <img src={artwork[selected.id].src} width="66" height="66" alt="" />
-            </div>
-          </div>
-        ) : (
-          <>
-            <HubHero paused={paused} onToggle={() => setPaused(value => !value)} />
-            <nav className="ih-library" aria-label="装修功能模块">
-              <h2>全部模块</h2>
-              <div className="ih-tiles">
-                {modules.map(({ id, title, description }, index) => (
-                  <button type="button" key={id} data-module={id} className="ih-tile" onClick={() => openModule(id)}
-                    style={{ '--ih-tint': artwork[id].tint, '--ih-order': index } as CSSProperties}>
-                    <span className="ih-tile-art" aria-hidden="true">
-                      <img src={artwork[id].src} alt="" width="350" height="350" draggable={false} />
-                    </span>
-                    <span className="ih-tile-arrow" aria-hidden="true">
-                      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4">
-                        <path d="M4.5 15.5 15 5M5.5 5H15v9.5" />
-                      </svg>
-                    </span>
-                    <span className="ih-tile-copy"><strong>{title}</strong><span>{description}</span></span>
-                  </button>
-                ))}
-              </div>
-            </nav>
-            <footer className="ih-author" aria-label="作者信息">
-              <span>作者</span>
-              <a href="https://github.com/hi-neason/dsh-iHome" target="_blank" rel="noopener noreferrer" aria-label="dsh-iHome（GitHub 开源项目）">
-                <GitHubIcon /><span>dsh-iHome</span>
-              </a>
-              <a href="https://www.xiaohongshu.com/user/profile/61a270ff0000000021025a3f" target="_blank" rel="noopener noreferrer" aria-label="爱屋日记（小红书）">
-                <XiaohongshuIcon /><span>爱屋日记</span>
-              </a>
-            </footer>
-          </>
-        )}
-        <ModuleDetail id={active} onAsk={onAsk} />
-      </div>
-    </section>
-  )
+  return <section className="ih-home" lang="zh-CN" aria-label="iHome 首页">
+    <style>{homeCss}</style>
+    <div className="ih-page ih-page-hub">
+      <header className="ih-masthead">
+        <div className="ih-brand"><StudioMark /><span>iHome</span></div>
+      </header>
+      <HubHero paused={paused} onToggle={() => setPaused(value => !value)} />
+      <nav className="ih-library" aria-label="装修功能模块">
+        <h2>全部模块</h2>
+        <ModuleTiles onOpenModule={onOpenModule} />
+      </nav>
+      <footer className="ih-author" aria-label="作者信息">
+        <span>作者</span>
+        <a href="https://github.com/hi-neason/dsh-iHome" target="_blank" rel="noopener noreferrer" aria-label="dsh-iHome（GitHub 开源项目）">
+          <GitHubIcon /><span>dsh-iHome</span>
+        </a>
+        <a href="https://www.xiaohongshu.com/user/profile/61a270ff0000000021025a3f" target="_blank" rel="noopener noreferrer" aria-label="爱屋日记（小红书）">
+          <XiaohongshuIcon /><span>爱屋日记</span>
+        </a>
+      </footer>
+    </div>
+  </section>
 }

@@ -6,7 +6,7 @@ import detailCss from './module-detail.css'
 import knowledgeCss from './knowledge.css'
 
 interface ModuleDetailProps {
-  id: ModuleId | null
+  id: Exclude<ModuleId, 'archive'> | null
   onAsk: (prompt: string) => void
 }
 
@@ -16,15 +16,7 @@ interface ModuleContent {
   tasks: { title: string, description: string, prompt: string }[]
 }
 
-const content: Record<Exclude<ModuleId, 'knowledge' | 'design'>, ModuleContent> = {
-  archive: {
-    intro: '把房屋信息和家人的生活习惯放在一起，给后续设计、报价和施工一份共同依据。',
-    checklist: ['准备原始户型图，注明版本与测量日期。', '按房间整理实测尺寸、门窗位置及现场照片。', '收集家人的日常习惯、收纳需求和设备清单。', '区分必须满足、可以妥协和还待讨论的需求。'],
-    tasks: [
-      { title: '梳理我家的居住需求', description: '从家庭成员和日常生活开始。', prompt: '请帮我建立家庭装修需求档案。先逐步询问家庭成员、房屋情况、日常习惯、收纳和设备需求，再按房间整理必须满足、可以妥协、待讨论的事项。对缺失信息保留待补充标记。' },
-      { title: '整理图纸与量房资料', description: '建立房间、尺寸和照片的对应关系。', prompt: '我想整理自家的户型图和量房资料。请先问我已有资料及其日期，再帮我设计按房间归档的目录和尺寸记录表，区分实测与估算，列出仍需现场复核的信息。' },
-    ],
-  },
+const content: Record<Exclude<ModuleId, 'knowledge' | 'design' | 'archive'>, ModuleContent> = {
   materials: {
     intro: '先确认安装条件，再比较型号与价格。把采购时间和施工节点一起考虑。',
     checklist: ['记录候选产品的准确品牌、型号、规格和报价日期。', '核对尺寸、开孔、用电、给排水及安装预留要求。', '确认报价包含的配件、运输、安装和售后范围。', '结合现场工序，约定下单、到货、验货和安装时间。'],

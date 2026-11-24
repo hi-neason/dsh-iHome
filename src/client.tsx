@@ -1,42 +1,74 @@
-import type { ComponentType } from 'react'
+import { useEffect, useState, useSyncExternalStore, type ComponentType } from 'react'
 import { Home } from './Home'
+import { ModuleWorkbench } from './ModuleWorkbench'
+import { createArchiveService } from './archive-client'
+import { createIHomeNavigation, workbenchKind, type NavigationContext } from './ihome-navigation'
+import { modules } from './modules'
 
-// The two desktop slots that expose a selectable main panel.
 type PanelSlot =
   | { name: 'main', key: string }
   | { name: 'sidebar.panellist', id: string, label: string }
-
-interface ClientContext {
-  uiWorkspace: {
-    startSession(workspaceId: undefined, options: { prompt: string, whenDraftExists: 'append' }): void
-  }
+  | { name: 'sidebar.right.pane.tab', key: string }
+interface ClientContext extends NavigationContext {
+  effect(setup: () => () => void): unknown
+  sidebarRightTabs: { register(definition: {
+    id: string, kind: string, title: () => string,
+    guide: { id: string, order: number, title: () => string, icon: ComponentType<{ size?: number }> }[]
+  }): () => void }
   slots: {
     inject(name: PanelSlot['name'], setup: () => () => void): unknown
-    register(slot: PanelSlot, component: ComponentType): () => void
+    register<P>(slot: PanelSlot, component: ComponentType<P>): () => void
   }
 }
 
 const panelId = 'ihome'
-export const inject = ['slots', 'uiWorkspace']
+const workbenchId = 'dsh-ihome-workbench'
+export const inject = ['slots', 'layout', 'uiWorkspace', 'sidebarRight', 'sidebarRightTabs', 'sessions', 'conversation']
 
 function IHomeIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-      aria-hidden="true" focusable="false">
-      <path d="M2 11 12 3l10 8" />
-      <path d="M5 8.6V20h5v-6h4v6h5V8.6" />
-    </svg>
-  )
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+    aria-hidden="true" focusable="false">
+    <path d="M2 11 12 3l10 8" /><path d="M5 8.6V20h5v-6h4v6h5V8.6" />
+  </svg>
 }
 
-export function apply({ slots, uiWorkspace }: ClientContext): void {
-  function IHomePanel() {
-    return <Home onAsk={prompt => uiWorkspace.startSession(undefined, { prompt, whenDraftExists: 'append' })} />
+export function apply(ctx: ClientContext): void {
+  const archiveService = createArchiveService()
+  const navigation = createIHomeNavigation(ctx)
+  ctx.effect(() => () => navigation.dispose())
+  function useWorkspace() {
+    const [error, setError] = useState('')
+    const snapshot = useSyncExternalStore(navigation.subscribe, navigation.getSnapshot)
+    useEffect(() => {
+      let active = true
+      void navigation.initialize().catch(error => { if (active) setError(String(error.message ?? error)) })
+      return () => { active = false }
+    }, [])
+    return { snapshot, error, setError }
   }
-
-  slots.inject('main', () =>
-    slots.register({ name: 'main', key: panelId }, IHomePanel))
-  slots.inject('sidebar.panellist', () =>
-    slots.register({ name: 'sidebar.panellist', id: panelId, label: 'iHome' }, IHomeIcon))
+  function IHomePanel() {
+    const { error } = useWorkspace()
+    return <>{error && <p role="alert">{error}</p>}<Home onOpenModule={navigation.openModule} /></>
+  }
+  function IHomeWorkbench({ sessionId }: { sessionId: string }) {
+    const { snapshot, error, setError } = useWorkspace()
+    const id = modules.find(module => snapshot[module.id] === sessionId)?.id ?? null
+    return <>{error && <p role="alert">{error}</p>}
+      <ModuleWorkbench key={sessionId} id={id} archiveService={archiveService}
+        onOpenModule={navigation.openModule} onAsk={prompt => {
+          setError('')
+          void navigation.prepareDraft(sessionId, prompt).catch(error => setError(String(error.message ?? error)))
+        }} />
+    </>
+  }
+  ctx.effect(() => ctx.sidebarRightTabs.register({
+    id: workbenchId, kind: workbenchKind, title: () => 'iHome工作台',
+    guide: [{ id: workbenchKind, order: 35, title: () => 'iHome工作台', icon: IHomeIcon }],
+  }))
+  ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: panelId }, IHomePanel))
+  ctx.slots.inject('sidebar.panellist', () =>
+    ctx.slots.register({ name: 'sidebar.panellist', id: panelId, label: 'iHome' }, IHomeIcon))
+  ctx.slots.inject('sidebar.right.pane.tab', () =>
+    ctx.slots.register({ name: 'sidebar.right.pane.tab', key: workbenchId }, IHomeWorkbench))
 }

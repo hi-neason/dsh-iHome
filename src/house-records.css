@@ -1,0 +1,38 @@
+.ih-records { display: grid; gap: 18px; min-width: 0; }
+.ih-records-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; }
+.ih-records button { color: var(--ih-ink); border: 1px solid var(--ih-line); background: var(--ih-surface); border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 12px; cursor: pointer; }
+.ih-records button:hover { border-color: var(--ih-muted); }
+.ih-records button:disabled { cursor: default; opacity: .5; }
+.ih-records .ih-records-submit { background: var(--ih-ink); color: var(--ih-bg); border-color: var(--ih-ink); }
+.ih-records-list { display: grid; gap: 10px; min-width: 0; }
+.ih-records-card { padding: 16px; border: 1px solid var(--ih-line); border-radius: 12px; background: var(--ih-surface); overflow-wrap: anywhere; }
+.ih-records-card h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.ih-records-card p { margin: 7px 0 0; color: var(--ih-muted); font-size: 12px; white-space: pre-wrap; }
+.ih-member-removal { margin-top: 12px; border-top: 1px solid var(--ih-line); padding-top: 12px; font-size: 13px; }
+.ih-member-removal ul { padding-inline-start: 18px; margin-block: 8px; }
+.ih-records-card-header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.ih-records-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; }
+.ih-records .ih-records-link { border-color: transparent; background: transparent; padding: 3px 7px; color: var(--ih-muted); }
+.ih-records-note { color: var(--ih-muted); font-size: 12px; line-height: 1.8; margin: 0; }
+.ih-records-form { display: grid; gap: 12px; padding: 18px; border: 1px solid var(--ih-line); border-radius: 12px; background: var(--ih-surface); }
+.ih-archive-dialog > .ih-records-form { padding: 0; border: 0; }
+.ih-archive-dialog .ih-records-form-footer { margin-top: 6px; }
+.ih-records-form h3 { margin: 0 0 2px; font-size: 14px; }
+.ih-records-form label { display: grid; gap: 6px; font-size: 12px; color: var(--ih-muted); }
+.ih-records-form input, .ih-records-form select, .ih-records-form textarea { width: 100%; min-width: 0; padding: 9px 10px; color: var(--ih-ink); background: var(--ih-bg); border: 1px solid var(--ih-line); border-radius: 7px; font: inherit; font-size: 13px; }
+.ih-records-form textarea { resize: vertical; min-height: 85px; }
+.ih-member-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ih-member-linked-needs { margin: 0; padding-inline-start: 18px; font-size: 13px; overflow-wrap: anywhere; }
+.ih-records-form input:focus-visible, .ih-records-form select:focus-visible, .ih-records-form textarea:focus-visible { outline: 2px solid var(--ih-ink); outline-offset: 2px; }
+.ih-records-form fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.ih-records-form legend { margin-bottom: 8px; padding: 0; font-size: 12px; color: var(--ih-muted); }
+.ih-records-choices { display: flex; flex-wrap: wrap; gap: 7px; }
+.ih-records-form .ih-records-choice { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--ih-line); border-radius: 6px; color: var(--ih-ink); }
+.ih-records-choice input { width: 13px; height: 13px; margin: 0; accent-color: var(--ih-ink); }
+.ih-records-form-footer { display: flex; flex-wrap: wrap; gap: 8px; }
+.ih-records-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.ih-records-tag { padding: 3px 7px; background: var(--ih-soft); color: var(--ih-muted); font-size: 11px; border-radius: 5px; }
+.ih-records-current { color: var(--ih-ink); font-size: 11px; border: 1px solid var(--ih-line); padding: 3px 7px; border-radius: 20px; white-space: nowrap; }
+.ih-records-error { margin: 0; padding: 10px 12px; border: 1px solid var(--ih-line); border-radius: 8px; font-size: 12px; color: var(--ih-ink); background: var(--ih-soft); }
+.ih-records-fold > summary { cursor: pointer; font-size: 13px; color: var(--ih-muted); }
+.ih-records-fold > .ih-records-list { margin-top: 10px; }
