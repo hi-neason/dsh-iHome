@@ -40,9 +40,9 @@ test('all household tools hide and refuse execution outside the dedicated worksp
   assert.deepEqual(f.counts(), initial, 'rejected calls must not read or modify archive storage')
 })
 
-const need = { title: '厨房通行', people: ['我'], places: [{ room: '厨房', zone: '水槽旁' }], priority: 'must', quote: '做饭时需要通道' }
+const need = { title: '厨房通行', people: ['我'], rooms: ['厨房', '用餐区'], priority: 'must', quote: '希望从厨房端菜到用餐区时通道够宽' }
 const fact = { kind: 'fact', text: '每天做饭', people: ['我'], quote: '我每天做饭' }
-const measurement = { kind: 'measurement', room: '厨房', zone: '水槽旁', label: '台面高度', value: 85, unit: 'cm', source: '实测', date: '2026-11-24', adopted: true, quote: '刚量过台面高85厘米' }
+const measurement = { kind: 'measurement', room: '厨房', label: '台面高度', value: 85, unit: 'cm', source: '实测', date: '2026-11-24', adopted: true, quote: '刚量过台面高85厘米' }
 const reply = (id, selected, custom) => ({ answers: [{ id, selected, custom }] })
 
 test('acceptance in the calling conversation commits the displayed need, fact and measurement', async () => {
@@ -65,7 +65,20 @@ test('acceptance in the calling conversation commits the displayed need, fact an
   const saved = f.archive()
   assert.deepEqual([saved.revision, saved.needs.length, saved.facts.length, saved.measurements.length], [3, 1, 1, 1])
   assert.deepEqual(saved.needs[0].memberIds, [saved.members[0].id])
-  assert.deepEqual(saved.needs[0].zoneIds, [saved.zones[0].id])
+  assert.deepEqual(saved.rooms.map(room => room.name), ['厨房', '用餐区'])
+  assert.deepEqual(saved.needs[0].roomIds, saved.rooms.map(room => room.id))
+  const { rooms } = await f.run('ihome_read_archive', {})
+  for (const room of rooms) {
+    const detail = await f.run('ihome_read_archive', { roomId: room.id })
+    assert.deepEqual(detail.needs.map(n => n.id), [saved.needs[0].id])
+    assert.deepEqual(detail.needs[0].roomIds, saved.needs[0].roomIds)
+    assert.equal(detail.measurements.length, room.name === '厨房' ? 1 : 0)
+    assert.ok(!('zones' in detail) && !('zoneIds' in detail.needs[0]))
+  }
+  const schema = name => f.registered.find(item => item.tool.name === name).tool.parameters
+  assert.ok(schema('ihome_propose_need').required.includes('rooms'))
+  assert.deepEqual(schema('ihome_propose_need').properties.rooms.items, { type: 'string' })
+  assert.ok(!('places' in schema('ihome_propose_need').properties) && !('zone' in schema('ihome_propose_record').properties))
   assert.ok(!('suggestions' in saved) && !('recordSuggestions' in saved))
   assert.equal((await f.run('ihome_propose_need', need, execution)).status, 'unchanged')
   assert.equal(requests.length, 3)
@@ -115,4 +128,28 @@ test('cancelling while awaiting an answer or waiting for storage cannot commit',
     assert.equal(f.archive().revision, 0)
     assert.equal(f.archive().measurements.length, 0)
   }
+})
+
+test('document lookup filters metadata by stage, kind, keyword and room without changing normal reads', async () => {
+  const f = await fixture()
+  const file = { attachmentId: 'sha256:' + 'a'.repeat(64), name: '资料.pdf', bytes: 100 }
+  const base = { houseId: 'home', date: '2026-11-26', roomIds: [], file }
+  await f.table.update('home', current => ({ ...current,
+    rooms: [{ id: 'kitchen', houseId: 'home', name: '厨房' }],
+    attachments: [
+      { ...base, id: 'original', name: '原始户型图' },
+      { ...base, id: 'material', name: '厨房地砖', stage: 'construction', kind: 'material', roomIds: ['kitchen'], source: '建材商', notes: '型号 A1' },
+      { ...base, id: 'quote', name: '施工报价', stage: 'selection', kind: 'document' },
+    ],
+  }))
+  assert.deepEqual(await f.run('ihome_read_archive', {}), { rooms: [{ id: 'kitchen', name: '厨房' }] })
+  const original = await f.run('ihome_read_archive', { documentStage: 'original' })
+  assert.deepEqual(original.documents.map(item => item.id), ['original'])
+  assert.equal(original.documents[0].kind, 'document')
+  assert.equal('file' in original.documents[0], false)
+  const material = await f.run('ihome_read_archive', { roomId: 'kitchen', documentStage: 'construction', documentKind: 'material', documentQuery: 'a1' })
+  assert.deepEqual(material.documents.map(item => item.id), ['material'])
+  assert.match(material.documentContent, /未读取文件正文/)
+  assert.deepEqual((await f.run('ihome_read_archive', { documentQuery: '不存在' })).documents, [])
+  for (const args of [{ documentStage: 'invalid' }, { documentKind: 'invalid' }, { documentQuery: '' }]) await assert.rejects(f.run('ihome_read_archive', args))
 })

@@ -95,9 +95,9 @@ function KnowledgeCard({ guide, onAsk }: KnowledgeProps & { guide: typeof guides
 
 export function Knowledge({ onAsk, showHeading = true }: KnowledgeProps) {
   return (
-    <section className="ih-knowledge" aria-label="装修知识库">
+    <section className="ih-knowledge" aria-label="装修知识助手">
       {showHeading && <div className="ih-knowledge-heading">
-        <h2>装修知识库</h2>
+        <h2>装修知识助手</h2>
       </div>}
       <div className="ih-guide-grid">
         {guides.map(guide => <KnowledgeCard key={guide.id} guide={guide} onAsk={onAsk} />)}

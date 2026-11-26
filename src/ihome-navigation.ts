@@ -1,4 +1,5 @@
 import { modules, type ModuleId } from './modules.ts'
+import { requestIHome } from './ihome-http.ts'
 import type { IHomeWorkspace, IHomeModuleSession } from './ihome-workspace.ts'
 
 export const workbenchKind = 'ihome-workbench'
@@ -18,23 +19,18 @@ export interface NavigationContext {
   }): string } }
 }
 
-type HostFetch = (input: string | URL, init: RequestInit) => Promise<Response>
 export function createIHomeNavigation(ctx: NavigationContext) {
-  const globals = globalThis as typeof globalThis & { __DSH_TRANSPORT__?: { fetch?: HostFetch } }
-  const fetchHost = globals.__DSH_TRANSPORT__?.fetch ?? globalThis.fetch.bind(globalThis)
   let snapshot: Partial<Record<ModuleId, string>> = {}
   const listeners = new Set<() => void>()
   let initialization: Promise<void> | undefined
   let disposed = false
   let opening = 0
   async function request<T>(path: string, body?: object): Promise<T> {
-    const response = await fetchHost(`api/ihome/${path}`, {
-      method: 'POST', credentials: 'same-origin',
+    const response = await requestIHome(path, {
+      method: 'POST',
       headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}),
     })
-    const value = await response.json() as T & { error?: string }
-    if (!response.ok) throw new Error(value.error ?? `iHome 工作区连接失败（${response.status}）`)
-    return value
+    return response.json() as Promise<T>
   }
   function publish(next: Partial<Record<ModuleId, string>>) {
     if (disposed) return

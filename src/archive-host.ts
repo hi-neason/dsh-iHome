@@ -1,4 +1,4 @@
-import { prepareArchiveChange, createArchive, validateArchive, assertCurrentHouse } from './archive-model'
+import { prepareArchiveChange, createArchive, validateArchive, assertCurrentHouse, attachmentStage, documentStages } from './archive-model'
 import type { Archive, ArchiveFile } from './archive-model'
 import { isIHomeToolContext, type IHomeToolContext } from './ihome-workspace-path'
 import { createRecordProposalTool } from './archive-record-tool'
@@ -182,20 +182,17 @@ export async function mountArchive(ctx: ArchiveHostContext): Promise<void> {
       }))
       disposers.push(registerTool({
         name: 'ihome_propose_need',
-        description: '根据用户明确讲述的情况新增或修改居住需求。必须关联具体家人和房间内区域，保留用户原话，缺少信息先追问。houseId 默认为当前房屋。修改已有需求须提供其 id 和 version。此工具在当前对话展示修改内容，等用户选择接受后直接保存，返回写入结果。',
+        description: '根据用户明确讲述的情况新增或修改居住需求。每条需求至少关联一位家人和一个房间或区域，保留用户原话，缺少信息先追问。houseId 默认为当前房屋。修改已有需求须提供其 id 和 version。此工具在当前对话展示修改内容，等用户选择接受后直接保存，返回写入结果。',
         parameters: {
           type: 'object', additionalProperties: false,
           properties: {
             houseId: { type: 'string' }, title: { type: 'string' },
-            people: { type: 'array', items: { type: 'string' } },
-            places: { type: 'array', items: {
-              type: 'object', additionalProperties: false,
-              properties: { room: { type: 'string' }, zone: { type: 'string' } }, required: ['room', 'zone'],
-            } },
+            people: { type: 'array', minItems: 1, items: { type: 'string' } },
+            rooms: { type: 'array', minItems: 1, items: { type: 'string' }, description: '直接填写用户提到的房间或区域名称，例如「书房」「阅读区」。每个名称都是独立的一项。' },
             priority: { type: 'string', enum: ['must', 'prefer', 'discuss'] },
             quote: { type: 'string' }, targetNeedId: { type: 'string' }, targetVersion: { type: 'integer' },
           },
-          required: ['title', 'people', 'places', 'priority', 'quote'],
+          required: ['title', 'people', 'rooms', 'priority', 'quote'],
         },
         output: toolOutput(),
         execute: (args, execution) => confirmChange('need', args, execution),
@@ -203,12 +200,15 @@ export async function mountArchive(ctx: ArchiveHostContext): Promise<void> {
       disposers.push(registerTool(createRecordProposalTool((args, execution) => confirmChange('record', args, execution))))
       disposers.push(registerTool({
         name: 'ihome_read_archive',
-        description: '根据本轮话题按需读取家庭档案。houseId 可省略，默认使用当前家庭的房屋。仅传 houseId 或空参数时返回房间编号和名称目录，选定房间后用 roomId 读取该房间的区域、需求及尺寸记录（含 id 和是否采信）。明确需要生活习惯时提供 factQuery（具体话题关键词）或已知 factId，两者任选一个；未指定 roomId 时只返回匹配的事实及其成员。请使用当前对话提供的 houseId，仅检索本轮相关话题或房间。',
+        description: '根据本轮话题按需读取家庭档案。houseId 可省略，默认为当前房屋。仅传 houseId 或空参数时返回房间或区域的编号和名称。用 roomId 读取该处的需求、关联家人及尺寸记录（含 id 和是否采信）。明确需要生活习惯时提供 factQuery（具体话题关键词）或已知 factId，两者任选一个。查找归档文件时提供 documentQuery（名称、来源或备注关键词）、documentStage 或 documentKind，可组合筛选。文件查询仅返回归档信息，阅读正文需要原件。',
         parameters: {
           type: 'object', additionalProperties: false,
           properties: { houseId: { type: 'string' }, roomId: { type: 'string' },
             factQuery: { type: 'string', description: '本轮讨论的具体生活话题关键词，如做饭、早起。仅返回包含该关键词的生活事实。' },
-            factId: { type: 'string', description: '需要核对的已知生活事实编号。' } }, required: [],
+            factId: { type: 'string', description: '需要核对的已知生活事实编号。' },
+            documentQuery: { type: 'string', description: '资料名称、来源或备注中的关键词。' },
+            documentStage: { type: 'string', enum: documentStages.map(stage => stage.id) },
+            documentKind: { type: 'string', enum: ['document', 'material'] } }, required: [],
         },
         output: toolOutput(),
         async execute(args, execution) {
@@ -233,7 +233,7 @@ function archiveContext(archive: Archive, input: Record<string, unknown>): unkno
   const house = archive.houses[0]
   if (!house) throw new Error('请使用当前家庭档案提供的房屋编号。')
   const rooms = archive.rooms.filter(room => room.houseId === house.id && (input.roomId === undefined || room.id === input.roomId))
-  if (input.roomId !== undefined && rooms.length === 0) throw new Error('该房屋中未找到指定房间。')
+  if (input.roomId !== undefined && rooms.length === 0) throw new Error('该房屋中未找到指定的房间或区域。')
   if (input.factQuery !== undefined && input.factId !== undefined) throw new Error('请选择生活话题关键词或事实编号之一。')
   if (input.factQuery !== undefined && (typeof input.factQuery !== 'string' || !input.factQuery.trim())) throw new Error('请提供具体的生活话题关键词。')
   if (input.factId !== undefined && (typeof input.factId !== 'string' || !input.factId.trim())) throw new Error('生活事实编号无效。')
@@ -242,22 +242,33 @@ function archiveContext(archive: Archive, input: Record<string, unknown>): unkno
   const facts = archive.facts.filter(fact => factQuery !== undefined
     ? fact.text.toLocaleLowerCase().includes(factQuery) : input.factId !== undefined && fact.id === input.factId)
   if (input.factId !== undefined && facts.length === 0) throw new Error('未找到指定生活事实。')
+  const wantsDocuments = input.documentQuery !== undefined || input.documentStage !== undefined || input.documentKind !== undefined
+  if (input.documentQuery !== undefined && (typeof input.documentQuery !== 'string' || !input.documentQuery.trim())) throw new Error('请提供具体的资料关键词。')
+  if (input.documentStage !== undefined && !documentStages.some(stage => stage.id === input.documentStage)) throw new Error('资料阶段无效。')
+  if (input.documentKind !== undefined && input.documentKind !== 'document' && input.documentKind !== 'material') throw new Error('资料类型无效。')
+  const query = typeof input.documentQuery === 'string' ? input.documentQuery.trim().toLocaleLowerCase() : ''
+  const documents = wantsDocuments ? archive.attachments.filter(item => item.houseId === house.id &&
+    (input.roomId === undefined || item.roomIds.length === 0 || item.roomIds.includes(String(input.roomId))) &&
+    (input.documentStage === undefined || attachmentStage(item) === input.documentStage) &&
+    (input.documentKind === undefined || (item.kind ?? 'document') === input.documentKind) &&
+    [item.name, item.source, item.notes].join(' ').toLocaleLowerCase().includes(query))
+    .map(item => ({ id: item.id, name: item.name, stage: attachmentStage(item), kind: item.kind ?? 'document',
+      roomIds: item.roomIds, date: item.date, source: item.source, notes: item.notes, originalName: item.file.name, bytes: item.file.bytes })) : []
+  const documentResult = wantsDocuments ? { documents, documentContent: '仅包含归档信息，未读取文件正文。' } : {}
   const memberIds = new Set(facts.flatMap(fact => fact.memberIds))
   if (input.roomId === undefined) {
-    if (!wantsFacts) return { rooms: rooms.map(({ id, name }) => ({ id, name })) }
-    return { facts, members: archive.members.filter(member => memberIds.has(member.id)).map(({ id, name }) => ({ id, name })) }
+    if (!wantsFacts) return wantsDocuments ? { revision: archive.revision, ...documentResult } : { rooms: rooms.map(({ id, name }) => ({ id, name })) }
+    return { ...documentResult, facts, members: archive.members.filter(member => memberIds.has(member.id)).map(({ id, name }) => ({ id, name })) }
   }
-  const roomIds = new Set(rooms.map(room => room.id))
-  const zones = archive.zones.filter(zone => roomIds.has(zone.roomId))
-  const zoneIds = new Set(zones.map(zone => zone.id))
-  const needs = archive.needs.filter(need => need.houseId === house.id && need.zoneIds.some(id => zoneIds.has(id)))
+  const roomId = rooms[0].id
+  const needs = archive.needs.filter(need => need.houseId === house.id && need.roomIds.includes(roomId))
   for (const need of needs) for (const id of need.memberIds) memberIds.add(id)
   return {
-    revision: archive.revision, house, rooms, zones,
+    revision: archive.revision, house, rooms, ...documentResult,
     members: archive.members.filter(member => memberIds.has(member.id)).map(({ id, name }) => ({ id, name })),
-    needs: needs.map(({ id, title, memberIds, zoneIds, priority, version }) => ({ id, title, memberIds, zoneIds, priority, version })),
+    needs: needs.map(({ id, title, memberIds, roomIds, priority, version }) => ({ id, title, memberIds, roomIds, priority, version })),
     ...(wantsFacts ? { facts } : {}),
-    measurements: archive.measurements.filter(item => roomIds.has(item.roomId))
-      .map(({ id, roomId, zoneId, label, value, unit, source, date, adopted }) => ({ id, roomId, ...(zoneId ? { zoneId } : {}), label, value, unit, source, date, adopted })),
+    measurements: archive.measurements.filter(item => item.roomId === roomId)
+      .map(({ id, roomId, label, value, unit, source, date, adopted }) => ({ id, roomId, label, value, unit, source, date, adopted })),
   }
 }

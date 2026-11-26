@@ -1,0 +1,74 @@
+.ih-task-workbench { margin-top: 18px; color: var(--ih-ink); font-size: 13px; }
+.ih-task-workbench button, .ih-task-form button { font: inherit; color: var(--ih-ink); background: var(--ih-surface); border: 1px solid var(--ih-line); border-radius: 7px; padding: 7px 11px; cursor: pointer; }
+.ih-task-workbench button:hover, .ih-task-form button:hover { border-color: var(--ih-muted); }
+.ih-task-workbench :is(button,input):focus-visible, .ih-task-form :is(button,input,textarea):focus-visible { outline: 2px solid var(--ih-ink); outline-offset: 3px; }
+.ih-task-workbench :is(button,input):disabled, .ih-task-form :disabled { opacity: .5; cursor: default; }
+.ih-task-workbench .ih-task-primary, .ih-task-form .ih-task-primary { color: var(--ih-bg); background: var(--ih-ink); border-color: var(--ih-ink); }
+.ih-task-toolbar, .ih-task-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ih-task-toolbar small { color: var(--ih-muted); font-size: 11px; margin-left: auto; }
+.ih-task-progress { padding: 16px; margin: 18px 0 14px; border: 1px solid var(--ih-line); border-radius: 12px; background: var(--ih-soft); }
+.ih-task-progress > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ih-task-progress > div > span { color: var(--ih-muted); }
+.ih-task-progress strong { font-size: 22px; font-weight: 600; }
+.ih-task-progress strong span { color: var(--ih-muted); font-size: 13px; font-weight: 400; }
+.ih-task-progress progress { display: block; width: 100%; height: 5px; margin-top: 12px; appearance: none; border: 0; overflow: hidden; border-radius: 3px; background: var(--ih-line); color: var(--ih-ink); }
+.ih-task-progress progress::-webkit-progress-bar { background: var(--ih-line); }
+.ih-task-progress progress::-webkit-progress-value { background: var(--ih-ink); border-radius: 3px; }
+.ih-task-progress progress::-moz-progress-bar { background: var(--ih-ink); }
+.ih-task-progress p { margin: 8px 0 0; color: var(--ih-muted); font-size: 11px; }
+.ih-task-overdue { color: var(--ih-ink); }
+.ih-task-calendar { padding: 14px; border: 1px solid var(--ih-line); border-radius: 12px; background: var(--ih-surface); }
+.ih-task-month { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.ih-task-month h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.ih-task-month > div { display: flex; gap: 4px; align-items: center; }
+.ih-task-month button { min-height: 30px; padding: 3px 9px; font-size: 12px; }
+.ih-task-month button[aria-label] { font-size: 19px; line-height: 1; }
+.ih-task-weekdays, .ih-task-days { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 3px; }
+.ih-task-weekdays { margin-bottom: 5px; text-align: center; color: var(--ih-muted); font-size: 11px; }
+.ih-task-workbench .ih-task-day { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; min-height: 43px; padding: 3px 0; border-color: transparent; background: transparent; line-height: 1.25; font-size: 12px; font-variant-numeric: tabular-nums; }
+.ih-task-day > small { height: 13px; min-width: 13px; font-size: 9px; margin-top: 2px; line-height: 13px; border-radius: 3px; }
+.ih-task-day > small:not(:empty) { background: var(--ih-soft); color: var(--ih-ink); }
+.ih-task-day > small[data-complete] { color: var(--ih-muted); }
+.ih-task-workbench .ih-task-day[data-outside] { color: var(--ih-muted); opacity: .5; }
+.ih-task-workbench .ih-task-day[data-today] > span { font-weight: 750; text-decoration: underline; text-underline-offset: 4px; }
+.ih-task-workbench .ih-task-day[aria-pressed='true'] { color: var(--ih-bg); background: var(--ih-ink); opacity: 1; }
+.ih-task-workbench .ih-task-day:hover { border-color: var(--ih-line); }
+.ih-task-date-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.ih-task-date-filters button { padding: 5px 9px; font-size: 11px; }
+.ih-task-date-filters > span { margin-left: auto; font-size: 11px; color: var(--ih-muted); }
+.ih-task-workbench .ih-task-date-filters [aria-pressed='true'] { border-color: var(--ih-muted); background: var(--ih-soft); }
+.ih-task-list-heading { display: flex; align-items: center; justify-content: space-between; margin: 23px 0 11px; }
+.ih-task-list-heading h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.ih-task-list-heading > span { color: var(--ih-muted); font-size: 12px; }
+.ih-task-filters { display: flex; gap: 4px; padding: 3px; border-radius: 9px; background: var(--ih-soft); }
+.ih-task-filters button { flex: 1; padding: 6px 3px; font-size: 12px; border-color: transparent; background: transparent; color: var(--ih-muted); }
+.ih-task-filters button[aria-pressed='true'] { background: var(--ih-surface); color: var(--ih-ink); border-color: var(--ih-line); }
+.ih-task-list { list-style: none; padding: 0; margin: 10px 0 0; }
+.ih-task-list > li { display: flex; align-items: flex-start; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--ih-line); }
+.ih-task-list > li > input { flex: none; margin: 2px 0 0; width: 16px; height: 16px; accent-color: var(--ih-ink); cursor: pointer; }
+.ih-task-item { flex: 1; min-width: 0; }
+.ih-task-item > strong { display: block; overflow-wrap: anywhere; font-size: 13px; line-height: 1.5; font-weight: 560; }
+.ih-task-list > li[data-completed] .ih-task-item > strong { text-decoration: line-through; color: var(--ih-muted); }
+.ih-task-meta { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--ih-muted); margin-top: 6px; }
+.ih-task-item details { margin-top: 7px; font-size: 12px; color: var(--ih-muted); }
+.ih-task-item summary { cursor: pointer; width: fit-content; }
+.ih-task-item details p { overflow-wrap: anywhere; white-space: pre-wrap; line-height: 1.65; margin: 6px 0; }
+.ih-task-item-actions { display: flex; gap: 12px; margin-top: 6px; }
+.ih-task-item-actions button { border: 0; padding: 3px 0; background: transparent; font-size: 11px; color: var(--ih-muted); }
+.ih-task-empty { padding: 24px 12px; text-align: center; color: var(--ih-muted); }
+.ih-task-error, .ih-task-notice { margin: 12px 0; padding: 10px 12px; background: var(--ih-soft); border-left: 3px solid var(--ih-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.ih-task-error > button { margin-left: 8px; }
+.ih-task-notice p { margin: 0 0 8px; }
+.ih-task-form { font-size: 13px; }
+.ih-task-form > fieldset { display: grid; gap: 15px; margin: 0 0 18px; padding: 0; border: 0; min-width: 0; }
+.ih-task-form label { display: grid; gap: 6px; }
+.ih-task-form input:not([type='checkbox']), .ih-task-form textarea { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid var(--ih-line); border-radius: 7px; background: var(--ih-bg); color: var(--ih-ink); padding: 9px 10px; font: inherit; }
+.ih-task-form textarea { resize: vertical; line-height: 1.6; }
+.ih-task-form small { color: var(--ih-muted); font-size: 11px; }
+.ih-task-form .ih-task-completed-field { display: flex; align-items: center; gap: 7px; }
+.ih-task-completed-field input { margin: 0; width: 15px; height: 15px; accent-color: var(--ih-ink); }
+.ih-task-delete-context { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ih-muted); font-size: 12px; }
+@container ihome (max-width: 400px) {
+  .ih-task-calendar { padding: 10px; }
+  .ih-task-toolbar small { width: 100%; margin-left: 0; }
+}

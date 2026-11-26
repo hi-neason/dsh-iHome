@@ -5,12 +5,16 @@ import { HouseRecords } from './HouseRecords'
 import { currentHouse, validateArchive, type Archive, type ArchiveService } from './archive-model'
 import css from './family-archive.css'
 
-const tabs = ['居住需求', '家人与房屋', '资料与备份'] as const
+const tabs = ['居住需求', '家人与房屋', '基础资料'] as const
 type Tab = typeof tabs[number]
 // Keep the active view when a DSH conversation temporarily unmounts the panel.
 let lastTab: Tab = '居住需求'
 
-export function FamilyArchive({ service, onAsk }: { service: ArchiveService, onAsk: (prompt: string) => void }) {
+type ArchiveViewProps = { service: ArchiveService } & (
+  { documents: true, onAsk?: never } | { documents?: false, onAsk: (prompt: string) => void }
+)
+
+export function FamilyArchive({ service, onAsk, documents }: ArchiveViewProps) {
   const [archive, setArchive] = useState<Archive>()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -65,20 +69,20 @@ export function FamilyArchive({ service, onAsk }: { service: ArchiveService, onA
   }
   const house = archive ? currentHouse(archive) : undefined
   useEffect(() => { lastTab = tab }, [tab])
-  return <section className="ih-family-archive" aria-label="本地家庭档案"><style>{css}</style>
+  return <section className="ih-family-archive" aria-label={documents ? '文档资料员的资料库' : '本地家庭档案'}><style>{css}</style>
     {error && <div className="ih-archive-error" role="alert"><span>{error}</span>
       <button type="button" disabled={busy} onClick={() => void refresh()}>重新载入</button></div>}
     {!archive || !house ? <p role="status">{error ? '档案暂时无法打开。' : '正在读取本机档案…'}</p> : <>
       <div className="ih-archive-bar">
-        <nav className="ih-archive-tabs" aria-label="家庭档案视图">{tabs.map(item =>
-          <button key={item} aria-label={item} aria-current={tab === item ? 'page' : undefined} onClick={() => setTab(item)}>{item}</button>)}</nav>
-        <div className="ih-archive-status">{tab !== '居住需求' && <button disabled={busy} onClick={() => void refresh()}>刷新档案</button>}
+        {!documents && <nav className="ih-archive-tabs" aria-label="家庭档案视图">{tabs.map(item =>
+          <button key={item} aria-label={item} aria-current={tab === item ? 'page' : undefined} onClick={() => setTab(item)}>{item}</button>)}</nav>}
+        <div className="ih-archive-status">{(documents || tab !== '居住需求') && <button disabled={busy} onClick={() => void refresh()}>刷新档案</button>}
           <small role="status">{busy ? '正在保存…' : saved ? '已保存到本机' : '本机档案'}</small></div>
       </div>
       <div key={house.id}>
-        {tab === '居住需求' && <ArchiveNeeds archive={archive} houseId={house.id} busy={busy} save={save} saveError={error} onAsk={onAsk} />}
-        {tab === '家人与房屋' && <HouseRecords archive={archive} houseId={house.id} save={save} busy={busy} saveError={error} onAsk={onAsk} />}
-        {tab === '资料与备份' && <ArchiveFiles archive={archive} houseId={house.id} service={service} save={save} busy={busy} />}
+        {!documents && tab === '居住需求' && <ArchiveNeeds archive={archive} houseId={house.id} busy={busy} save={save} saveError={error} onAsk={onAsk} />}
+        {!documents && tab === '家人与房屋' && <HouseRecords archive={archive} houseId={house.id} save={save} busy={busy} saveError={error} onAsk={onAsk} />}
+        {(documents || tab === '基础资料') && <ArchiveFiles allStages={documents} archive={archive} houseId={house.id} service={service} save={save} busy={busy} />}
       </div>
     </>}
   </section>

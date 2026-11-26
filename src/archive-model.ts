@@ -1,3 +1,5 @@
+import { stages } from './modules.ts'
+
 /** JSON shared by the desktop host, the panel and portable backups. */
 export type Priority = 'must' | 'prefer' | 'discuss'
 export interface Member {
@@ -6,27 +8,42 @@ export interface Member {
 }
 export interface House { id: string, name: string }
 export interface Room { id: string, houseId: string, name: string }
-export interface Zone { id: string, roomId: string, name: string }
 export interface Fact { id: string, text: string, memberIds: string[], quote?: string }
 export interface Need {
-  id: string, houseId: string, title: string, memberIds: string[], zoneIds: string[],
+  id: string, houseId: string, title: string, memberIds: string[], roomIds: string[],
   factIds: string[], priority: Priority, quote: string, version: number
 }
 export interface NeedInput {
-  houseId: string, title: string, people: string[], places: { room: string, zone: string }[],
+  houseId: string, title: string, people: string[], rooms: string[],
   priority: Priority, quote: string
 }
 export interface Measurement {
-  id: string, roomId: string, zoneId?: string, label: string, value: number, unit: 'mm' | 'cm' | 'm',
+  id: string, roomId: string, label: string, value: number, unit: 'mm' | 'cm' | 'm',
   source: '实测' | '图纸' | '估算', date: string, adopted: boolean, attachmentId?: string, quote?: string
 }
 export interface ArchiveFile { attachmentId: string, name: string, bytes: number }
-export interface Attachment { id: string, houseId: string, name: string, roomIds: string[], date: string, file: ArchiveFile }
+export const documentStages = [
+  { id: 'original', title: '原始资料' },
+  ...stages,
+  { id: 'general', title: '通用资料' },
+] as const
+export type DocumentStage = typeof documentStages[number]['id']
+export interface Attachment {
+  id: string, houseId: string, name: string, roomIds: string[], date: string, file: ArchiveFile,
+  stage?: DocumentStage, kind?: 'document' | 'material', source?: string, notes?: string
+}
+export function attachmentStage(attachment: Attachment): DocumentStage { return attachment.stage ?? 'original' }
+export function removeAttachment(archive: Archive, id: string): Archive {
+  check(archive.attachments.some(item => item.id === id), '这份资料已被移除，请刷新。')
+  check(!archive.measurements.some(item => item.attachmentId === id) &&
+    !archive.decisions.some(item => item.attachmentIds.includes(id)), '尺寸记录或装修决定仍引用此原件，请先解除引用。')
+  return { ...archive, attachments: archive.attachments.filter(item => item.id !== id) }
+}
 export interface Decision {
   id: string, houseId: string, text: string, reason: string, needIds: string[], attachmentIds: string[], supersedesId?: string
 }
 export interface Archive {
-  revision: number, familyName: string, members: Member[], houses: House[], rooms: Room[], zones: Zone[],
+  revision: number, familyName: string, members: Member[], houses: House[], rooms: Room[],
   facts: Fact[], needs: Need[], measurements: Measurement[], attachments: Attachment[], decisions: Decision[]
 }
 export interface ArchiveService {
@@ -54,7 +71,7 @@ function withCurrentHouse(archive: Archive, raw: unknown): Record<string, unknow
 
 export const newId = () => crypto.randomUUID()
 export function createArchive(): Archive {
-  return { revision: 0, familyName: '我的家庭', houses: [{ id: 'home', name: '我的家' }], members: [], rooms: [], zones: [],
+  return { revision: 0, familyName: '我的家庭', houses: [{ id: 'home', name: '我的家' }], members: [], rooms: [],
     facts: [], needs: [], measurements: [], attachments: [], decisions: [] }
 }
 
@@ -105,12 +122,12 @@ const day: Reader<string> = value => {
 }
 const ids = list(label)
 const priority = choice('must', 'prefer', 'discuss')
-const needFields = { houseId: label, title: label, people: list(label), places: list(object({ room: label, zone: label })), priority, quote: text }
+const needFields = { houseId: label, title: label, people: list(label), rooms: list(label), priority, quote: text }
 const targetFields = { targetNeedId: optional(label), targetVersion: optional(count) }
 const parseInput = object(needFields)
 const parseProposal = object({ ...needFields, ...targetFields })
 const factProposal = object({ kind: choice('fact'), houseId: label, text: label, people: list(label), quote: label, targetFactId: optional(label) })
-const measurementProposal = object({ kind: choice('measurement'), houseId: label, room: label, zone: optional(label), label,
+const measurementProposal = object({ kind: choice('measurement'), houseId: label, room: label, label,
   value: positive, unit: choice('mm', 'cm', 'm'), source: choice('实测', '图纸', '估算'), date: day, adopted: flag, quote: label,
   previousMeasurementId: optional(label) })
 function parseRecordInput(raw: unknown) {
@@ -123,12 +140,14 @@ const parseArchive = object({
     id: label, name: label, residency: choice('常住', '偶住', '待确认'),
     gender: optional(choice('男', '女', '其他')), age: optional(memberAge), needsText: optional(memberNeedsText),
   })),
-  rooms: list(object({ id: label, houseId: label, name: label })), zones: list(object({ id: label, roomId: label, name: label })),
+  rooms: list(object({ id: label, houseId: label, name: label })),
   facts: list(object({ id: label, text: label, memberIds: ids, quote: optional(text) })),
-  needs: list(object({ id: label, houseId: label, title: label, memberIds: ids, zoneIds: ids, factIds: ids, priority, quote: text, version: count })),
-  measurements: list(object({ id: label, roomId: label, zoneId: optional(label), label, value: positive, unit: choice('mm', 'cm', 'm'),
+  needs: list(object({ id: label, houseId: label, title: label, memberIds: ids, roomIds: ids, factIds: ids, priority, quote: text, version: count })),
+  measurements: list(object({ id: label, roomId: label, label, value: positive, unit: choice('mm', 'cm', 'm'),
     source: choice('实测', '图纸', '估算'), date: day, adopted: flag, attachmentId: optional(label), quote: optional(text) })),
   attachments: list(object({ id: label, houseId: label, name: label, roomIds: ids, date: day,
+    stage: optional(choice(...documentStages.map(stage => stage.id))), kind: optional(choice('document', 'material')),
+    source: optional(text), notes: optional(text),
     file: object({ attachmentId: label, name: label, bytes: count }) })),
   decisions: list(object({ id: label, houseId: label, text: label, reason: text, needIds: ids, attachmentIds: ids, supersedesId: optional(label) })),
 })
@@ -162,35 +181,96 @@ export function removeMember(archive: Archive, memberId: string): Archive {
   return { ...archive, members: archive.members.filter(item => item.id !== memberId) }
 }
 
+/** Collapse the former room/zone hierarchy when reading saved archives and backups. */
+function migrateLegacyLocations(value: unknown): unknown {
+  check(value && typeof value === 'object' && !Array.isArray(value), '档案记录格式有误。')
+  const raw = value as Record<string, unknown>
+  const hasLegacyField = (items: unknown, field: string) => Array.isArray(items) && items.some(item =>
+    item && typeof item === 'object' && (item as Record<string, unknown>)[field] !== undefined)
+  // Current archives need only the canonical parser; still detect orphaned legacy links.
+  if (raw.zones === undefined && !hasLegacyField(raw.needs, 'zoneIds') &&
+    !hasLegacyField(raw.measurements, 'zoneId')) return raw
+  const zoneRows = raw.zones === undefined ? [] : list(object({ id: label, roomId: label, name: label }))(raw.zones)
+  const zones = index(zoneRows)
+  const rooms = index(list(object({ id: label, houseId: label, name: label }))(raw.rooms))
+  unique(zoneRows.map(zone => scopedName(zone.roomId, zone.name)), '旧版同一房间内区域名不能重复。')
+  for (const zone of zoneRows) check(rooms.has(zone.roomId), '旧版区域所属的房间或区域不存在。')
+  const record: Reader<Record<string, unknown>> = item => {
+    check(item && typeof item === 'object' && !Array.isArray(item), '档案记录格式有误。')
+    return item as Record<string, unknown>
+  }
+  const needs = list(record)(raw.needs).map(need => {
+    if (need.zoneIds === undefined) return need
+    const oldIds = ids(need.zoneIds)
+    references(oldIds, id => zones.has(id), '旧版需求关联的区域不存在。')
+    const mapped = oldIds.map(id => zones.get(id)!.roomId)
+    const direct = need.roomIds === undefined ? [] : ids(need.roomIds)
+    references(direct, id => rooms.has(id), '需求关联的房间或区域不存在。')
+    return { ...need, roomIds: [...new Set([...direct, ...mapped])] }
+  })
+  const measurements = list(record)(raw.measurements)
+  for (const measurement of measurements) {
+    if (measurement.zoneId !== undefined) {
+      const zone = zones.get(label(measurement.zoneId))
+      check(zone && zone.roomId === measurement.roomId, '旧版尺寸记录的房间或区域无效。')
+    }
+  }
+  // Different former positions retain separate measurement histories and adopted values.
+  unique(measurements.filter(m => m.adopted === true).map(m =>
+    JSON.stringify([m.roomId, m.zoneId, m.label])), '同一位置的同一尺寸只能采信一个值。')
+  const labels = new Set(measurements.map(m => scopedName(label(m.roomId), label(m.label))))
+  const positions = new Map<string, Set<unknown>>()
+  for (const measurement of measurements) {
+    const key = scopedName(label(measurement.roomId), label(measurement.label))
+    const group = positions.get(key) ?? new Set<unknown>()
+    group.add(measurement.zoneId)
+    positions.set(key, group)
+  }
+  const renamed = new Map<string, string>()
+  for (const measurement of measurements) {
+    const group = positions.get(scopedName(label(measurement.roomId), label(measurement.label)))!
+    if (group.size < 2) continue
+    const key = JSON.stringify([measurement.roomId, measurement.zoneId, measurement.label])
+    if (renamed.has(key)) continue
+    const position = measurement.zoneId === undefined ? '原整个房间' : zones.get(label(measurement.zoneId))!.name
+    const base = label(measurement.label) + '（' + position + '）'
+    let name = base, suffix = 2
+    while (labels.has(scopedName(label(measurement.roomId), name))) name = base + ' ' + suffix++
+    labels.add(scopedName(label(measurement.roomId), name))
+    renamed.set(key, name)
+  }
+  return { ...raw, needs, measurements: measurements.map(measurement => ({ ...measurement,
+    label: renamed.get(JSON.stringify([measurement.roomId, measurement.zoneId, measurement.label])) ?? measurement.label,
+  })) }
+}
+
 export function validateArchive(value: unknown): Archive {
-  const a = parseArchive(value)
-  const members = index(a.members), houses = index(a.houses), rooms = index(a.rooms), zones = index(a.zones)
+  const a = parseArchive(migrateLegacyLocations(value))
+  const members = index(a.members), houses = index(a.houses), rooms = index(a.rooms)
   const facts = index(a.facts), needs = index(a.needs), files = index(a.attachments), decisions = index(a.decisions)
   index(a.measurements)
   check(houses.size, '请保留至少一套房屋。')
   unique(a.members.map(m => m.name), '请给家人使用可区分的称呼。')
   unique(a.houses.map(h => h.name), '房屋名称重复。')
-  unique(a.rooms.map(r => scopedName(r.houseId, r.name)), '同一套房屋里房间名不能重复。')
-  unique(a.zones.map(z => scopedName(z.roomId, z.name)), '同一房间内区域名不能重复。')
-  for (const r of a.rooms) check(houses.has(r.houseId), '房间所属的房屋不存在。')
-  for (const z of a.zones) check(rooms.has(z.roomId), '区域所属的房间不存在。')
+  unique(a.rooms.map(r => scopedName(r.houseId, r.name)), '同一套房屋里房间或区域名称不能重复。')
+  for (const r of a.rooms) check(houses.has(r.houseId), '房间或区域所属的房屋不存在。')
   for (const f of a.facts) references(f.memberIds, id => members.has(id), '生活事实关联的家人无效。')
   for (const n of a.needs) {
     check(houses.has(n.houseId) && n.version > 0, '需求所属房屋或版本无效。')
-    check(n.memberIds.length && n.zoneIds.length, '每条需求都要关联家人和房间内的具体区域。')
+    check(n.memberIds.length && n.roomIds.length, '每条需求都要关联家人和房间或区域。')
     references(n.memberIds, id => members.has(id), '需求关联的家人无效。')
     references(n.factIds, id => facts.has(id), '需求关联的生活事实无效。')
-    references(n.zoneIds, id => rooms.get(zones.get(id)?.roomId ?? '')?.houseId === n.houseId, '需求区域必须属于当前房屋。')
+    references(n.roomIds, id => rooms.get(id)?.houseId === n.houseId, '需求关联的房间或区域必须属于当前房屋。')
   }
   for (const f of a.attachments) {
     check(houses.has(f.houseId) && /^sha256:[a-f0-9]{64}$/.test(f.file.attachmentId), '附件引用无效。')
-    references(f.roomIds, id => rooms.get(id)?.houseId === f.houseId, '附件关联的房间无效。')
+    references(f.roomIds, id => rooms.get(id)?.houseId === f.houseId, '附件关联的房间或区域无效。')
   }
   for (const m of a.measurements) {
-    check(rooms.has(m.roomId) && (!m.zoneId || zones.get(m.zoneId)?.roomId === m.roomId), '尺寸记录的房间或区域无效。')
+    check(rooms.has(m.roomId), '尺寸记录的房间或区域无效。')
     if (m.attachmentId) check(files.get(m.attachmentId)?.houseId === rooms.get(m.roomId)?.houseId, '尺寸记录的依据文件无效。')
   }
-  unique(a.measurements.filter(m => m.adopted).map(m => JSON.stringify([m.roomId, m.zoneId, m.label])), '同一位置的同一尺寸只能采信一个值。')
+  unique(a.measurements.filter(m => m.adopted).map(m => JSON.stringify([m.roomId, m.label])), '同一位置的同一尺寸只能采信一个值。')
   for (const d of a.decisions) {
     check(houses.has(d.houseId), '决定对应的房屋不存在。')
     references(d.needIds, id => needs.get(id)?.houseId === d.houseId, '决定关联的需求无效。')
@@ -204,16 +284,16 @@ interface SaveNeedOptions { needId?: string, expectedVersion?: number, factIds?:
 
 export function storeNeed(archive: Archive, raw: NeedInput, opts: SaveNeedOptions = {}): Archive {
   const data = parseInput(raw)
-  check(data.people.length && data.places.length, '请至少选择一位家人和一个房间内的具体区域。')
+  check(data.people.length && data.rooms.length, '请至少选择一位家人和一个房间或区域。')
   const prior = opts.needId ? archive.needs.find(n => n.id === opts.needId && n.houseId === data.houseId) : undefined
   if (opts.needId) check(prior && prior.version === opts.expectedVersion, '这条需求已被修改，请重新核对最新版本。')
-  const members = [...archive.members], rooms = [...archive.rooms], zones = [...archive.zones]
+  const members = [...archive.members], rooms = [...archive.rooms]
   const memberIds = data.people.map(name => resolveMember(members, name))
-  const zoneIds = data.places.map(place => resolvePlace(rooms, zones, data.houseId, place.room, place.zone).zoneId!)
+  const roomIds = data.rooms.map(name => resolveRoom(rooms, data.houseId, name))
   const record: Need = { id: prior?.id ?? newId(), houseId: data.houseId, title: data.title, quote: data.quote,
-    memberIds: [...new Set(memberIds)], zoneIds: [...new Set(zoneIds)], priority: data.priority,
+    memberIds: [...new Set(memberIds)], roomIds: [...new Set(roomIds)], priority: data.priority,
     factIds: opts.factIds ?? prior?.factIds ?? [], version: (prior?.version ?? 0) + 1 }
-  return validateArchive({ ...archive, rooms, members, zones, needs: prior ? archive.needs.map(n => n.id === record.id ? record : n) : [...archive.needs, record] })
+  return validateArchive({ ...archive, rooms, members, needs: prior ? archive.needs.map(n => n.id === record.id ? record : n) : [...archive.needs, record] })
 }
 
 function resolveMember(members: Member[], name: string): string {
@@ -222,14 +302,10 @@ function resolveMember(members: Member[], name: string): string {
   return member.id
 }
 
-function resolvePlace(rooms: Room[], zones: Zone[], houseId: string, roomName: string, zoneName?: string) {
-  let room = rooms.find(r => r.houseId === houseId && r.name === roomName)
-  if (!room) { room = { id: newId(), houseId, name: roomName }; rooms.push(room) }
-  const roomId = room.id
-  if (!zoneName) return { roomId, zoneId: undefined }
-  let zone = zones.find(z => z.roomId === roomId && z.name === zoneName)
-  if (!zone) { zone = { id: newId(), roomId, name: zoneName }; zones.push(zone) }
-  return { roomId, zoneId: zone.id }
+function resolveRoom(rooms: Room[], houseId: string, name: string): string {
+  let room = rooms.find(r => r.houseId === houseId && r.name === name)
+  if (!room) { room = { id: newId(), houseId, name }; rooms.push(room) }
+  return room.id
 }
 
 export interface PreparedArchiveChange { next: Archive, summary: string, changed: boolean }
@@ -242,13 +318,10 @@ function sameIds(left: string[], right: string[]): boolean {
 
 function describeNeed(archive: Archive, need: Need): string {
   const people = need.memberIds.map(id => archive.members.find(member => member.id === id)!.name)
-  const places = need.zoneIds.map(id => {
-    const zone = archive.zones.find(item => item.id === id)!
-    return archive.rooms.find(room => room.id === zone.roomId)!.name + ' / ' + zone.name
-  })
+  const places = need.roomIds.map(id => archive.rooms.find(room => room.id === id)!.name)
   return [
     '需求描述：' + need.title, '关联家人：' + people.join('、'),
-    '位置：' + places.join('、'), '重要程度：' + priorityLabels[need.priority],
+    '房间或区域：' + places.join('、'), '重要程度：' + priorityLabels[need.priority],
     '依据原话：' + need.quote,
   ].join('\n')
 }
@@ -263,9 +336,8 @@ function describeFact(archive: Archive, fact: Fact): string {
 
 function describeMeasurement(archive: Archive, measurement: Measurement): string {
   const room = archive.rooms.find(item => item.id === measurement.roomId)!
-  const zone = archive.zones.find(item => item.id === measurement.zoneId)
   return [
-    '位置：' + room.name + (zone ? ' / ' + zone.name : '（整个房间）'),
+    '房间或区域：' + room.name,
     '测量项目：' + measurement.label,
     '尺寸：' + measurement.value + ' ' + measurement.unit,
     '来源：' + measurement.source, '日期：' + measurement.date,
@@ -278,12 +350,9 @@ function prepared(archive: Archive, next: Archive, summary: string): PreparedArc
   const validated = validateArchive(next)
   const createdMembers = validated.members.filter(item => !archive.members.some(old => old.id === item.id))
   const createdRooms = validated.rooms.filter(item => !archive.rooms.some(old => old.id === item.id))
-  const createdZones = validated.zones.filter(item => !archive.zones.some(old => old.id === item.id))
   const additions = [
     createdMembers.length ? '同时添加家人：' + createdMembers.map(item => item.name).join('、') : '',
-    createdRooms.length ? '同时添加房间：' + createdRooms.map(item => item.name).join('、') : '',
-    createdZones.length ? '同时添加区域：' + createdZones.map(item =>
-      validated.rooms.find(room => room.id === item.roomId)!.name + ' / ' + item.name).join('、') : '',
+    createdRooms.length ? '同时添加房间或区域：' + createdRooms.map(item => item.name).join('、') : '',
   ].filter(Boolean)
   return { next: validated, summary: [summary, ...additions].join('\n\n'), changed: true }
 }
@@ -294,7 +363,7 @@ export function prepareArchiveChange(archive: Archive, kind: 'need' | 'record', 
   assertCurrentHouse(archive, label(input.houseId))
   if (kind === 'need') {
     const data = parseProposal(input)
-    check(data.people.length && data.places.length && data.quote, '请先问清涉及的家人、具体区域，并保留用户原话。')
+    check(data.people.length && data.rooms.length && data.quote, '请先问清涉及的家人、房间或区域，并保留用户原话。')
     check((data.targetNeedId === undefined) === (data.targetVersion === undefined), '修改需求须同时提供原需求编号和版本。')
     const prior = archive.needs.find(item => item.id === data.targetNeedId && item.houseId === data.houseId)
     const next = storeNeed(archive, data, { needId: data.targetNeedId, expectedVersion: data.targetVersion })
@@ -302,7 +371,7 @@ export function prepareArchiveChange(archive: Archive, kind: 'need' | 'record', 
     const matching = archive.needs.find(item =>
       (!data.targetNeedId || item.id === data.targetNeedId) && item.houseId === target.houseId &&
       item.title === target.title && item.quote === target.quote && item.priority === target.priority &&
-      sameIds(item.memberIds, target.memberIds) && sameIds(item.zoneIds, target.zoneIds) &&
+      sameIds(item.memberIds, target.memberIds) && sameIds(item.roomIds, target.roomIds) &&
       sameIds(item.factIds, target.factIds))
     if (matching) return { next: archive, summary: '这条需求已经入档。\n' + describeNeed(archive, matching), changed: false }
     const summary = prior
@@ -336,25 +405,24 @@ export function prepareArchiveChange(archive: Archive, kind: 'need' | 'record', 
   const previous = archive.measurements.find(item => item.id === data.previousMeasurementId)
   if (data.previousMeasurementId) {
     const room = archive.rooms.find(item => item.id === previous?.roomId)
-    const zone = archive.zones.find(item => item.id === previous?.zoneId)
     check(previous && room?.houseId === data.houseId && room.name === data.room &&
-      zone?.name === data.zone && previous.label === data.label, '原尺寸与本次记录的位置或测量项目不符。')
+      previous.label === data.label, '原尺寸与本次记录的位置或测量项目不符。')
   }
-  const rooms = [...archive.rooms], zones = [...archive.zones]
-  const { roomId, zoneId } = resolvePlace(rooms, zones, data.houseId, data.room, data.zone)
+  const rooms = [...archive.rooms]
+  const roomId = resolveRoom(rooms, data.houseId, data.room)
   const measurement: Measurement = {
-    id: newId(), roomId, zoneId, label: data.label, value: data.value, unit: data.unit,
+    id: newId(), roomId, label: data.label, value: data.value, unit: data.unit,
     source: data.source, date: data.date, adopted: data.adopted, quote: data.quote,
   }
   const matching = archive.measurements.find(item =>
-    item.roomId === roomId && item.zoneId === zoneId && item.label === data.label &&
+    item.roomId === roomId && item.label === data.label &&
     item.value === data.value && item.unit === data.unit && item.source === data.source &&
     item.date === data.date && item.adopted === data.adopted && item.quote === data.quote)
   if (matching) return { next: archive, summary: '这条尺寸已经入档。\n' + describeMeasurement(archive, matching), changed: false }
   const replaced = archive.measurements.filter(item =>
-    data.adopted && item.adopted && item.roomId === roomId && item.zoneId === zoneId && item.label === data.label)
+    data.adopted && item.adopted && item.roomId === roomId && item.label === data.label)
   const measurements = archive.measurements.map(item => replaced.includes(item) ? { ...item, adopted: false } : item)
-  const next = { ...archive, rooms, zones, measurements: [...measurements, measurement] }
+  const next = { ...archive, rooms, measurements: [...measurements, measurement] }
   const before = [...new Set([previous, ...replaced].filter((item): item is Measurement => !!item))]
   const summary = [
     '新增尺寸记录', ...before.map(item => '保留已有尺寸\n' + describeMeasurement(archive, item)),

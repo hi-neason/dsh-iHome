@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { FamilyArchive } from './FamilyArchive'
+import { DocumentLibrary } from './DocumentLibrary'
+import { TaskWorkbench } from './TaskWorkbench'
+import type { TaskService } from './task-client'
 import { ModuleDetail } from './ModuleDetail'
-import { ModuleTiles, moduleArtwork, type OpenModule } from './ModuleTiles'
+import { ModuleTiles, AgentPortrait, type OpenModule } from './ModuleTiles'
 import { modules, type ModuleId } from './modules'
 import type { ArchiveService } from './archive-model'
 import homeCss from './home.css'
@@ -9,12 +12,13 @@ import homeCss from './home.css'
 interface WorkbenchProps {
   id: ModuleId | null
   archiveService: ArchiveService
+  taskService: TaskService
   onAsk: (prompt: string) => void
   onOpenModule: OpenModule
 }
 
 /** The DSH detail pane provides its own tab header and resizing controls. */
-export function ModuleWorkbench({ id, archiveService, onAsk, onOpenModule }: WorkbenchProps) {
+export function ModuleWorkbench({ id, archiveService, taskService, onAsk, onOpenModule }: WorkbenchProps) {
   const [choosing, setChoosing] = useState(false)
   const module = modules.find(item => item.id === id)
   const showDirectory = !module || choosing
@@ -22,17 +26,19 @@ export function ModuleWorkbench({ id, archiveService, onAsk, onOpenModule }: Wor
     <style>{homeCss}</style>
     <div className="ih-workbench-page">
       <header className="ih-workbench-header">
-        {!showDirectory && module && <img src={moduleArtwork[module.id].src} alt="" width="46" height="46" />}
-        <h1>{showDirectory ? '选择装修模块' : module.title}</h1>
+        {!showDirectory && module && module.id !== 'budget' && <AgentPortrait id={module.id} />}
+        <h1>{showDirectory ? '我的装修专家团' : module.title}</h1>
         {module && <button type="button" onClick={() => setChoosing(!choosing)}>
-          {choosing ? '返回' + module.title : '切换模块'}
+          {choosing ? '返回' + module.title : '切换专家'}
         </button>}
       </header>
-      {showDirectory ? <nav aria-label="切换装修模块"><ModuleTiles onOpenModule={async next => {
+      {showDirectory ? <nav aria-label="切换装修专家"><ModuleTiles onOpenModule={async next => {
         await onOpenModule(next)
         setChoosing(false)
       }} /></nav> : id === 'archive'
         ? <FamilyArchive service={archiveService} onAsk={onAsk} />
+        : id === 'documents' ? <DocumentLibrary service={archiveService} />
+        : id === 'tasks' ? <TaskWorkbench service={taskService} onAsk={onAsk} />
         : <ModuleDetail key={id} id={id} onAsk={onAsk} />}
     </div>
   </section>

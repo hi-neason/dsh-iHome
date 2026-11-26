@@ -5,7 +5,7 @@ import tableCss from './house-tables.css'
 interface TableProps {
   archive: Archive
   houseId: string
-  actions: (kind: 'member' | 'room' | 'zone', id: string) => ReactNode
+  actions: (kind: 'member' | 'room', id: string) => ReactNode
 }
 
 const segmenter = new Intl.Segmenter('zh-CN', { granularity: 'grapheme' })
@@ -69,38 +69,20 @@ function AssociatedNeeds({ needs, archive }: { needs: Need[], archive: Archive }
   </>
 }
 
-export function RoomsTable({ archive, houseId, actions, onAddZone, busy }: TableProps & {
-  onAddZone: (roomId: string) => void
-  busy: boolean
-}) {
+export function RoomsTable({ archive, houseId, actions }: TableProps) {
   const rooms = archive.rooms.filter(room => room.houseId === houseId)
   const needs = archive.needs.filter(need => need.houseId === houseId)
-  return <div className="ih-table-scroll" role="region" aria-label="房间与区域表格" tabIndex={0}>
+  return <div className="ih-table-scroll" role="region" aria-label="房间或区域表格" tabIndex={0}>
     <style>{tableCss}</style>
     <table className="ih-records-table ih-rooms-table">
       <thead><tr><th scope="col">名称</th><th scope="col">关联需求</th><th scope="col">关联家人</th><th scope="col">操作</th></tr></thead>
       <tbody>
-        {!rooms.length && <tr><td colSpan={4} className="ih-table-empty">暂无房间，点击「添加房间」开始记录。</td></tr>}
-        {rooms.map(room => {
-          const zones = archive.zones.filter(zone => zone.roomId === room.id)
-          const zoneIds = new Set(zones.map(zone => zone.id))
-          const roomNeeds = needs.filter(need => need.zoneIds.some(id => zoneIds.has(id)))
-          return <Fragment key={room.id}>
-            <tr className="ih-table-room">
-              <th scope="row">{room.name}</th>
-              <AssociatedNeeds needs={roomNeeds} archive={archive} />
-              <td className="ih-table-actions">
-                {actions('room', room.id)}
-                <button type="button" className="ih-records-link" aria-haspopup="dialog" disabled={busy} onClick={() => onAddZone(room.id)}>添加区域</button>
-              </td>
-            </tr>
-            {zones.map(zone => <tr key={zone.id} className="ih-table-zone">
-              <th scope="row"><span aria-hidden="true">↳ </span>{zone.name}</th>
-              <AssociatedNeeds needs={needs.filter(need => need.zoneIds.includes(zone.id))} archive={archive} />
-              <td className="ih-table-actions">{actions('zone', zone.id)}</td>
-            </tr>)}
-          </Fragment>
-        })}
+        {!rooms.length && <tr><td colSpan={4} className="ih-table-empty">暂无房间或区域，点击「添加房间或区域」开始记录。</td></tr>}
+        {rooms.map(room => <tr key={room.id} className="ih-table-room">
+          <th scope="row">{room.name}</th>
+          <AssociatedNeeds needs={needs.filter(need => need.roomIds.includes(room.id))} archive={archive} />
+          <td className="ih-table-actions">{actions('room', room.id)}</td>
+        </tr>)}
       </tbody>
     </table>
   </div>

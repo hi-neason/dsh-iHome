@@ -21,6 +21,7 @@ test('module sessions survive repeated opens, concurrent clicks, renames and res
       sessionPersistence: { stat: async id => headers.has(id) ? { header: headers.get(id) } : undefined, flush: async () => {} },
       sessionController: {
         async create({ sessionId }) { creates++; headers.set(sessionId, { id: sessionId, cwd: directory }); return { sessionId } },
+        async projections({ sessionId }) { return { kind: 'sequenced', values: { title: names.get(sessionId) } } },
         async rename({ sessionId, title }) { if (failRename) throw new Error('rename failed'); names.set(sessionId, title) },
       },
     }
@@ -28,7 +29,17 @@ test('module sessions survive repeated opens, concurrent clicks, renames and res
     const [first, repeated] = await Promise.all([manager.open('archive'), manager.open('archive')])
     assert.equal(first.sessionId, repeated.sessionId)
     assert.equal(creates, 1)
-    assert.equal(names.get(first.sessionId), '家庭档案库')
+    assert.equal(names.get(first.sessionId), '需求分析师')
+    stored.sessions.archive.roleTitle = '家庭需求分析师'
+    names.set(first.sessionId, '家庭需求分析师')
+    assert.equal((await manager.open('archive')).sessionId, first.sessionId)
+    assert.equal(names.get(first.sessionId), '需求分析师')
+    // Simulate a pre-team archive session and a later user-named conversation.
+    delete stored.sessions.archive.roleTitle
+    names.set(first.sessionId, '家庭档案库')
+    assert.equal((await manager.open('archive')).sessionId, first.sessionId)
+    assert.equal(names.get(first.sessionId), '需求分析师')
+    delete stored.sessions.archive.roleTitle
     names.set(first.sessionId, '我的具体需求')
     archived.add(first.sessionId)
     manager = createWorkspaceManager(ctx, table, directory)
@@ -49,6 +60,25 @@ test('module sessions survive repeated opens, concurrent clicks, renames and res
     assert.equal(creates, 3)
     await assert.rejects(manager.open('invalid'))
     assert.equal(creates, 3)
+    const budget = await manager.open('budget')
+    names.set(budget.sessionId, '已经记下的装修支出')
+    const movein = await manager.open('movein')
+    assert.notEqual(movein.sessionId, budget.sessionId)
+    assert.equal(names.get(movein.sessionId), '入住规划师')
+    manager = createWorkspaceManager(ctx, table, directory)
+    const recovered = await manager.ensure()
+    assert.equal(recovered.moduleSessions.budget, budget.sessionId)
+    assert.equal(recovered.moduleSessions.movein, movein.sessionId)
+    assert.equal((await manager.open('budget')).sessionId, budget.sessionId)
+    assert.equal(names.get(budget.sessionId), '已经记下的装修支出')
+    const documents = await manager.open('documents')
+    assert.equal(names.get(documents.sessionId), '文档资料员')
+    assert.notEqual(documents.sessionId, movein.sessionId)
+    const tasks = await manager.open('tasks')
+    assert.equal(names.get(tasks.sessionId), '任务待办助理')
+    assert.notEqual(tasks.sessionId, documents.sessionId)
+    manager = createWorkspaceManager(ctx, table, directory)
+    assert.equal((await manager.open('tasks')).sessionId, tasks.sessionId)
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 
@@ -82,6 +112,28 @@ test('module system instructions apply only to their own native sessions', () =>
   const state = { sessions: { archive: { sessionId: 'archive-session', ready: true } } }
   assert.equal(moduleSessionPrompt(state, undefined), '')
   assert.equal(moduleSessionPrompt(state, 'ordinary-session'), '')
-  assert.match(moduleSessionPrompt(state, 'archive-session'), /具体家人和区域/)
+  assert.match(moduleSessionPrompt(state, 'archive-session'), /「需求分析师」/)
+  assert.match(moduleSessionPrompt(state, 'archive-session'), /家人和至少一个房间或区域/)
   assert.match(moduleSessionPrompt(state, 'archive-session'), /ihome_propose_need/)
+})
+
+test('renamed roles and new move-in role receive their own conversation instructions', () => {
+  const state = { sessions: {
+    handover: { sessionId: 'inspection', ready: true },
+    movein: { sessionId: 'moving', ready: true },
+    budget: { sessionId: 'old-budget', ready: true },
+    documents: { sessionId: 'documents', ready: true },
+    tasks: { sessionId: 'task-chat', ready: true },
+  } }
+  assert.match(moduleSessionPrompt(state, 'inspection'), /「验收监理」/)
+  assert.match(moduleSessionPrompt(state, 'inspection'), /整改及复验/)
+  assert.match(moduleSessionPrompt(state, 'moving'), /「入住规划师」/)
+  assert.match(moduleSessionPrompt(state, 'moving'), /保洁、搬运、收纳/)
+  assert.match(moduleSessionPrompt(state, 'old-budget'), /「预算与记账」/)
+  assert.match(moduleSessionPrompt(state, 'documents'), /「文档资料员」/)
+  assert.match(moduleSessionPrompt(state, 'documents'), /各阶段产生的文档及物料资料/)
+  const tasks = moduleSessionPrompt(state, 'task-chat')
+  assert.match(tasks, /「任务待办助理」/)
+  assert.match(tasks, /ihome_read_tasks/)
+  assert.match(tasks, /ihome_propose_task/)
 })

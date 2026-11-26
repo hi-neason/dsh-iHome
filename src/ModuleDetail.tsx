@@ -6,7 +6,7 @@ import detailCss from './module-detail.css'
 import knowledgeCss from './knowledge.css'
 
 interface ModuleDetailProps {
-  id: Exclude<ModuleId, 'archive'> | null
+  id: Exclude<ModuleId, 'archive' | 'documents' | 'tasks'> | null
   onAsk: (prompt: string) => void
 }
 
@@ -16,7 +16,7 @@ interface ModuleContent {
   tasks: { title: string, description: string, prompt: string }[]
 }
 
-const content: Record<Exclude<ModuleId, 'knowledge' | 'design' | 'archive'>, ModuleContent> = {
+const content: Record<Exclude<ModuleId, 'knowledge' | 'design' | 'archive' | 'documents' | 'tasks'>, ModuleContent> = {
   materials: {
     intro: '先确认安装条件，再比较型号与价格。把采购时间和施工节点一起考虑。',
     checklist: ['记录候选产品的准确品牌、型号、规格和报价日期。', '核对尺寸、开孔、用电、给排水及安装预留要求。', '确认报价包含的配件、运输、安装和售后范围。', '结合现场工序，约定下单、到货、验货和安装时间。'],
@@ -55,6 +55,14 @@ const content: Record<Exclude<ModuleId, 'knowledge' | 'design' | 'archive'>, Mod
     tasks: [
       { title: '准备交付验收清单', description: '按实际施工和设备范围逐项核对。', prompt: '请先了解我的装修施工范围、设备清单和合同验收约定，再帮我准备交付验收清单。按房间和工种列出检查方法、所需资料与记录方式，标明需要专业人员或仪器检测的项目。具体标准注明依据与适用条件。' },
       { title: '整理保修与遗留问题', description: '记录责任人、期限和复验安排。', prompt: '请帮我整理装修交付后的遗留问题与保修台账。先询问合同、设备资料、问题照片和已有整改约定，再整理责任人、联系方式、约定期限、复查结果及保修起止日期。缺失信息列为待确认。' },
+    ],
+  },
+  movein: {
+    intro: '从交付后的保洁、物品搬运到设备启用，把入住前后的事项按家人的生活节奏安排好。',
+    checklist: ['确认交付遗留问题的整改、复验和入住条件。', '核对家具进场尺寸、电梯预约与搬运保护安排。', '按房间安排保洁、物品收纳和搬家顺序。', '整理设备使用说明、保修联系人与维护周期。'],
+    tasks: [
+      { title: '安排搬家与入住', description: '结合家人时间、物品清单和交付状态排期。', prompt: '请帮我安排搬家入住。先了解计划入住日期、家庭成员、交付和整改状态、家具家电到货、现有物品及物业搬运要求，再整理保洁、搬运、安装、收纳和启用检查的先后顺序。入住条件根据我提供的实际检测和交付资料核实，缺失信息列为待确认。' },
+      { title: '制定设备维护计划', description: '把说明书、保修和日常养护对应起来。', prompt: '请帮我制定入住后的设备维护计划。先询问家中设备型号、说明书、安装日期、保修资料和联系人，再按厂商要求整理清洁、更换耗材、保养与报修事项，注明周期依据和下次处理时间。' },
     ],
   },
 }

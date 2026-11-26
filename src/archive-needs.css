@@ -17,14 +17,13 @@
 .ih-needs-text-button:hover { color: var(--ih-ink); }
 .ih-needs-main { flex: 1 0 100%; min-width: 0; display: grid; gap: 16px; }
 .ih-needs-main[hidden] { display: none; }
-.ih-needs-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.ih-needs-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
 .ih-needs-filters label { display: grid; gap: 5px; color: var(--ih-muted); font-size: 11px; }
-.ih-needs-table { min-width: 490px; table-layout: fixed; }
-.ih-needs-table thead th:nth-child(1) { width: 34%; }
-.ih-needs-table thead th:nth-child(2) { width: 16%; }
-.ih-needs-table thead th:nth-child(3) { width: 15%; }
-.ih-needs-table thead th:nth-child(4) { width: 18%; }
-.ih-needs-table thead th:nth-child(5) { width: 17%; }
+.ih-needs-table { min-width: 430px; table-layout: fixed; }
+.ih-needs-table tr > :nth-child(n+2) { padding-inline: 7px; }
+.ih-needs-table thead th:nth-child(2) { width: clamp(80px, 16cqi, 120px); }
+.ih-needs-table thead th:nth-child(3) { width: clamp(82px, 14cqi, 104px); }
+.ih-needs-table thead th:nth-child(4) { width: 74px; }
 .ih-needs-table tbody + tbody { border-top: 1px solid var(--ih-line); }
 .ih-needs-table .ih-needs-priority { white-space: nowrap; }
 .ih-needs-description { display: flex; width: 100%; align-items: baseline; gap: 6px; border: 0; padding: 0; background: transparent; color: inherit; text-align: start; }
@@ -54,8 +53,6 @@
 .ih-needs-quick-form fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 18px; }
 .ih-needs-quick-form label { display: grid; gap: 7px; font-size: 13px; }
 .ih-needs-quick-form .ih-needs-actions { justify-content: flex-end; }
-.ih-needs-zone-group { display: grid; gap: 7px; }
-.ih-needs-zone-group > span { font-size: 12px; color: var(--ih-muted); }
 .ih-needs-editor .ih-needs-actions { border-top: 1px solid var(--ih-line); padding-top: 16px; justify-content: flex-end; }
 .ih-needs-error { color: #aa4438; font-size: 13px; }
 .ih-needs-notice { color: var(--ih-muted); font-size: 12px; line-height: 1.7; }

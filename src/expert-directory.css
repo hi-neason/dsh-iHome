@@ -1,0 +1,125 @@
+.ih-expert-directory {
+  --ih-expert-columns: 5;
+  --ih-expert-height: 110px;
+  --ih-expert-gap: clamp(10px, 1.2cqi, 18px);
+  --ih-stage-accent: #698f7e;
+}
+.ih-expert-stages, .ih-expert-general-list {
+  display: grid;
+  grid-template-columns: repeat(var(--ih-expert-columns), minmax(0, 1fr));
+  align-items: start;
+  gap: var(--ih-expert-gap);
+}
+.ih-expert-stage { min-width: 0; }
+.ih-expert-stage[data-stage='selection'] { --ih-stage-accent: #889aaf; }
+.ih-expert-stage[data-stage='construction'] { --ih-stage-accent: #bc936d; }
+.ih-expert-stage[data-stage='acceptance'] { --ih-stage-accent: #78a4a7; }
+.ih-expert-stage[data-stage='movein'] { --ih-stage-accent: #aba174; }
+.ih-expert-stage > h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 12px;
+  padding: 11px 13px;
+  border: 1px solid var(--ih-line);
+  border-radius: 8px;
+  background: var(--ih-soft);
+  color: var(--ih-ink);
+  font-size: 14px;
+  font-weight: 580;
+  line-height: 1.4;
+}
+.ih-expert-stage > h2::before {
+  content: '';
+  width: 4px;
+  height: 14px;
+  flex: none;
+  border-radius: 2px;
+  background: var(--ih-stage-accent);
+}
+.ih-expert-stage-list { display: grid; gap: 12px; }
+.ih-expert-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  width: 100%;
+  height: var(--ih-expert-height);
+  padding: 12px;
+  border: 1px solid var(--ih-line);
+  border-radius: 11px;
+  color: var(--ih-ink);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--ih-stage-accent) 8%, var(--ih-surface)), var(--ih-surface) 80%);
+  text-align: start;
+  cursor: pointer;
+}
+.ih-expert-photo {
+  display: block;
+  width: clamp(44px, 4.9cqi, 68px);
+  flex: none;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--ih-soft);
+}
+.ih-expert-copy { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ih-expert-copy strong {
+  color: var(--ih-ink);
+  font-size: clamp(13px, 1.12cqi, 16px);
+  line-height: 1.5;
+  font-weight: 620;
+  letter-spacing: -.025em;
+}
+.ih-expert-description {
+  color: var(--ih-muted);
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.ih-expert-arrow {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  border: 1px solid var(--ih-line);
+  border-radius: 50%;
+  color: var(--ih-muted);
+}
+.ih-expert-card:is(:hover, :focus-visible) { border-color: var(--ih-stage-accent); }
+.ih-expert-card:focus-visible { outline: 2px solid var(--ih-ink); outline-offset: 3px; }
+.ih-expert-card:disabled { cursor: progress; }
+.ih-expert-card[aria-busy='true'] { border-color: var(--ih-stage-accent); background: var(--ih-soft); }
+.ih-expert-general { margin-top: clamp(20px, 2.4cqi, 32px); }
+.ih-expert-general > h2 { margin: 0 0 12px; color: var(--ih-ink); font-size: 16px; font-weight: 580; }
+.ih-expert-error { padding: 10px 12px; color: var(--ih-ink); border-inline-start: 3px solid var(--ih-muted); background: var(--ih-soft); }
+@media (prefers-reduced-motion: no-preference) {
+  .ih-expert-card { transition: border-color .2s, transform .2s, box-shadow .2s; }
+  .ih-expert-photo .ih-portrait { transition: transform .28s ease-out; }
+  .ih-expert-card:is(:hover, :focus-visible) { transform: translateY(-2px); box-shadow: 0 7px 14px -12px var(--ih-shadow); }
+  .ih-expert-card:is(:hover, :focus-visible) .ih-portrait { transform: scale(1.05); }
+}
+@container ihome (max-width: 1050px) {
+  .ih-expert-directory { --ih-expert-height: 176px; }
+  .ih-expert-card { flex-direction: column; align-items: flex-start; gap: 9px; }
+  .ih-expert-photo { width: 56px; }
+  .ih-expert-copy strong { font-size: 14px; }
+}
+@container ihome (max-width: 760px) {
+  .ih-expert-directory { --ih-expert-columns: 3; }
+  .ih-expert-stages { row-gap: 18px; }
+  .ih-expert-stage > h2 { margin-bottom: 9px; }
+}
+@container ihome (max-width: 560px) {
+  .ih-expert-directory { --ih-expert-columns: 2; }
+}
+@container ihome (max-width: 400px) {
+  .ih-expert-directory { --ih-expert-columns: 1; --ih-expert-height: 100px; }
+  .ih-expert-card { flex-direction: row; align-items: center; }
+  .ih-expert-photo { width: 56px; }
+  .ih-expert-copy strong { font-size: 15px; }
+  .ih-expert-description { font-size: 12px; }
+  .ih-expert-arrow { display: flex; }
+}

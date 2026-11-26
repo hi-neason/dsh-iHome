@@ -1,26 +1,9 @@
 import { validateArchive } from './archive-model'
 import type { ArchiveFile, ArchiveService } from './archive-model'
-
-type HostFetch = (input: string | URL, init: RequestInit) => Promise<Response>
+import { requestIHome as request } from './ihome-http'
 
 /** Use the same authenticated carrier as DSH, including its desktop bridge. */
 export function createArchiveService(): ArchiveService {
-  const globals = globalThis as typeof globalThis & { __DSH_TRANSPORT__?: { fetch?: HostFetch } }
-  const fetchHost: HostFetch = globals.__DSH_TRANSPORT__?.fetch ?? ((input, init) => globalThis.fetch(input, init))
-  async function request(path: string, init: RequestInit = {}): Promise<Response> {
-    const response = await fetchHost(`api/ihome/${path}`, { credentials: 'same-origin', ...init })
-    if (!response.ok) {
-      let message = response.status === 413
-        ? '附件超过当前 DSH 宿主的请求大小上限，请拆分文件后上传。'
-        : `家庭档案暂时无法连接（${response.status}）。`
-      try {
-        const body = await response.json() as { error?: unknown }
-        if (typeof body.error === 'string') message = body.error
-      } catch { /* Preserve the transport error when the host sends a non-JSON response. */ }
-      throw new Error(message)
-    }
-    return response
-  }
   return {
     async load() {
       return validateArchive(await (await request('archive')).json())

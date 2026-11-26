@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore, type ComponentType } from 'r
 import { Home } from './Home'
 import { ModuleWorkbench } from './ModuleWorkbench'
 import { createArchiveService } from './archive-client'
+import { createTaskService } from './task-client'
 import { createIHomeNavigation, workbenchKind, type NavigationContext } from './ihome-navigation'
 import { modules } from './modules'
 
@@ -35,6 +36,7 @@ function IHomeIcon({ size = 16 }: { size?: number }) {
 
 export function apply(ctx: ClientContext): void {
   const archiveService = createArchiveService()
+  const taskService = createTaskService()
   const navigation = createIHomeNavigation(ctx)
   ctx.effect(() => () => navigation.dispose())
   function useWorkspace() {
@@ -55,7 +57,7 @@ export function apply(ctx: ClientContext): void {
     const { snapshot, error, setError } = useWorkspace()
     const id = modules.find(module => snapshot[module.id] === sessionId)?.id ?? null
     return <>{error && <p role="alert">{error}</p>}
-      <ModuleWorkbench key={sessionId} id={id} archiveService={archiveService}
+      <ModuleWorkbench key={sessionId} id={id} archiveService={archiveService} taskService={taskService}
         onOpenModule={navigation.openModule} onAsk={prompt => {
           setError('')
           void navigation.prepareDraft(sessionId, prompt).catch(error => setError(String(error.message ?? error)))

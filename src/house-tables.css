@@ -14,8 +14,6 @@
 .ih-table-actions .ih-records-actions { display: inline-flex; margin-top: 0; gap: 2px; flex-wrap: nowrap; vertical-align: top; }
 .ih-records .ih-table-actions .ih-records-link { padding: 1px 4px; font-size: 12px; }
 .ih-table-room > th { background: color-mix(in srgb, var(--ih-soft) 40%, transparent); }
-.ih-table-zone > th { padding-left: 24px; font-weight: 400 !important; }
-.ih-table-zone > th span { color: var(--ih-muted); }
 .ih-table-text, .ih-table-preview { white-space: normal; overflow-wrap: anywhere; }
 .ih-table-detail p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .ih-table-detail { max-width: 360px; }

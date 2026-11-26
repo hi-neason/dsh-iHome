@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import test from 'node:test'
-import { prepareArchiveChange, createArchive, currentHouse, memberReferences, removeMember, storeNeed, validateArchive } from '../src/archive-model.ts'
+import { prepareArchiveChange, createArchive, currentHouse, memberReferences, removeMember, removeAttachment, storeNeed, validateArchive } from '../src/archive-model.ts'
 import { inspectBackup, packArchive, restoreFiles } from '../src/archive-backup.ts'
 
 const dinner = {
   houseId: 'home', title: '两人做饭时保留一条通路', people: ['我', '妈妈'],
-  places: [{ room: '厨房', zone: '水槽旁' }, { room: '餐厅', zone: '餐边柜' }],
+  rooms: ['厨房', '餐厅'],
   priority: 'must', quote: '端菜时我们总要互相让。',
 }
 
@@ -76,20 +76,19 @@ test('confirmed requirements and habits protect the member and identify the refe
   assert.deepEqual(cleared.members, a.members.slice(1))
 })
 
-test('a confirmed need links multiple people and specific zones in their own rooms', () => {
+test('a confirmed need links multiple people and flat rooms or areas in their own house', () => {
   let a = createArchive()
   a.houses.push({ id: 'other', name: '另一套房屋' })
   a = storeNeed(a, dinner)
   a = storeNeed(a, { ...dinner, houseId: 'other' })
   assert.equal(a.members.length, 2)
   assert.equal(a.rooms.length, 4)
-  assert.equal(a.zones.length, 4)
   assert.equal(a.members[0].residency, '待确认')
   assert.equal(a.needs[0].memberIds.length, 2)
-  assert.deepEqual(a.needs[0].zoneIds, a.zones.slice(0, 2).map(z => z.id))
+  assert.deepEqual(a.needs[0].roomIds, a.rooms.slice(0, 2).map(r => r.id))
   assert.throws(() => storeNeed(a, { ...dinner, people: [] }), /家人/)
-  assert.throws(() => storeNeed(a, { ...dinner, places: [] }), /区域/)
-  assert.throws(() => validateArchive({ ...a, needs: [{ ...a.needs[0], zoneIds: a.needs[1].zoneIds }] }), /当前房屋/)
+  assert.throws(() => storeNeed(a, { ...dinner, rooms: [] }), /区域/)
+  assert.throws(() => validateArchive({ ...a, needs: [{ ...a.needs[0], roomIds: a.needs[1].roomIds }] }), /当前房屋/)
   assert.throws(() => validateArchive({ ...a, members: [] }), /家人/)
 })
 
@@ -102,7 +101,7 @@ test('conversation previews are isolated, deduplicate exact retries and preserve
   assert.equal(change.next.revision, archive.revision)
   assert.equal(change.next.needs.length, 1)
   assert.match(change.summary, /同时添加家人.*我、妈妈/)
-  assert.match(change.summary, /厨房 \/ 水槽旁/)
+  assert.match(change.summary, /厨房、餐厅/)
   assert.equal(Object.hasOwn(change.next, 'suggestions'), false)
   assert.equal(prepareArchiveChange(change.next, 'need', dinner).changed, false)
   const a = change.next
@@ -204,4 +203,101 @@ test('conversation writes default to the current house and retain complete long 
   const fact = prepareArchiveChange(change.next, 'record', { kind: 'fact', text: '下午看书', people: ['我'], quote: '下午看书' })
   assert.equal(fact.next.facts.length, 1)
   assert.equal(Object.hasOwn(fact.next, 'recordSuggestions'), false)
+})
+
+test('document metadata survives validation and backup while legacy attachments keep their shape', async () => {
+  const bytes = new TextEncoder().encode('original document')
+  const file = { attachmentId: 'sha256:' + createHash('sha256').update(bytes).digest('hex'), name: 'plan.pdf', bytes: bytes.length }
+  const legacy = { id: 'legacy', houseId: 'home', name: '原始户型图', roomIds: [], date: '2026-11-26', file }
+  const material = { ...legacy, id: 'material', name: '地板样本', stage: 'construction', kind: 'material', source: '商家', notes: '型号 A1' }
+  const archive = { ...createArchive(), attachments: [legacy, material] }
+  assert.deepEqual(validateArchive(archive).attachments, [legacy, material])
+  const backup = await packArchive(archive, { downloadFile: async () => new Blob([bytes]) })
+  assert.deepEqual((await inspectBackup(backup)).archive.attachments, [legacy, material])
+  for (const fields of [{ stage: 'unknown' }, { kind: 'unknown' }, { notes: 1 }]) {
+    assert.throws(() => validateArchive({ ...archive, attachments: [{ ...legacy, ...fields }] }))
+  }
+})
+
+
+test('referenced documents cannot be removed and other archive records stay intact', () => {
+  const attachment = { id: 'file', houseId: 'home', name: '依据.pdf', date: '2026-11-26', roomIds: [],
+    file: { attachmentId: 'sha256:' + 'a'.repeat(64), name: '依据.pdf', bytes: 4 } }
+  const a = { ...createArchive(), attachments: [attachment] }
+  assert.equal(removeAttachment(a, 'file').attachments.length, 0)
+  assert.equal(a.attachments.length, 1)
+  assert.throws(() => removeAttachment({ ...a, decisions: [{ attachmentIds: ['file'] }] }, 'file'), /引用/)
+  assert.throws(() => removeAttachment({ ...a, measurements: [{ attachmentId: 'file' }] }, 'file'), /引用/)
+  assert.throws(() => removeAttachment(a, 'missing'), /已被移除/)
+})
+
+function legacyLocations() {
+  const a = storeNeed(createArchive(), dinner)
+  const [kitchen, dining] = a.rooms
+  const zones = [
+    { id: 'sink', roomId: kitchen.id, name: '水槽旁' },
+    { id: 'window', roomId: kitchen.id, name: '窗边' },
+    { id: 'cabinet', roomId: dining.id, name: '餐边柜' },
+  ]
+  const { roomIds, ...need } = a.needs[0]
+  return { ...a, zones, needs: [{ ...need, zoneIds: zones.map(zone => zone.id) }] }
+}
+
+test('legacy zone links collapse to parent rooms without changing confirmed records or backup round trips', async () => {
+  const legacy = legacyLocations()
+  const need = legacy.needs[0]
+  legacy.facts = [{ id: 'fact', text: '一起做饭', memberIds: need.memberIds, quote: '原话' }]
+  need.factIds = ['fact']
+  legacy.decisions = [{ id: 'decision', houseId: 'home', text: '扩大通道', reason: '避免拥挤', needIds: [need.id], attachmentIds: [] }]
+  const original = structuredClone(legacy)
+  const a = validateArchive(legacy)
+  assert.deepEqual(legacy, original)
+  assert.deepEqual(a.needs[0].roomIds, legacy.rooms.map(room => room.id))
+  const { zoneIds, ...oldNeed } = need
+  assert.deepEqual(a.needs[0], { ...oldNeed, roomIds: a.rooms.map(room => room.id) })
+  assert.deepEqual(a.facts, legacy.facts)
+  assert.deepEqual(a.decisions, legacy.decisions)
+  assert.equal(Object.hasOwn(a, 'zones'), false)
+  assert.equal(Object.hasOwn(a.needs[0], 'zoneIds'), false)
+  assert.deepEqual(validateArchive(a), a)
+  const service = { downloadFile: async () => { throw new Error('no files') } }
+  const restored = (await inspectBackup(await packArchive(legacy, service))).archive
+  assert.deepEqual(restored, a)
+  assert.deepEqual((await inspectBackup(await packArchive(restored, service))).archive, a)
+})
+
+test('legacy migration rejects missing, duplicate, cross-house and mismatched zone references', () => {
+  const a = legacyLocations()
+  assert.throws(() => validateArchive({ ...a, zones: [] }), /区域不存在/)
+  const { zones, ...withoutZones } = a
+  assert.throws(() => validateArchive(withoutZones), /区域不存在/)
+  const flat = validateArchive(a)
+  assert.throws(() => validateArchive({ ...flat, measurements: [{ roomId: flat.rooms[0].id, zoneId: 'sink' }] }), /尺寸记录/)
+  assert.throws(() => validateArchive({ ...flat, needs: [{ ...flat.needs[0], zoneIds: ['sink'] }] }), /区域不存在/)
+  assert.throws(() => validateArchive({ ...a, zones: [...a.zones, a.zones[0]] }), /重复编号/)
+  assert.throws(() => validateArchive({ ...a, needs: [{ ...a.needs[0], zoneIds: ['sink', 'sink'] }] }), /区域不存在/)
+  assert.throws(() => validateArchive({ ...a, houses: [...a.houses, { id: 'other', name: '另一套' }],
+    rooms: a.rooms.map(room => ({ ...room, houseId: 'other' })) }), /当前房屋/)
+  assert.throws(() => validateArchive({ ...a, measurements: [{ roomId: a.rooms[0].id, zoneId: 'cabinet' }] }), /尺寸记录/)
+})
+
+test('legacy measurement collisions retain adopted values, historical grouping and stable labels', () => {
+  const a = legacyLocations()
+  const base = { roomId: a.rooms[0].id, label: '净宽', value: 2, unit: 'm', source: '实测', date: '2026-11-26', adopted: true }
+  a.measurements = [
+    { ...base, id: 'sink-old', zoneId: 'sink', adopted: false, value: 1.9 },
+    { ...base, id: 'sink-new', zoneId: 'sink' },
+    { ...base, id: 'window', zoneId: 'window', value: 3 },
+    { ...base, id: 'whole', value: 4 },
+    { ...base, id: 'existing-label', label: '净宽（水槽旁）', value: 5 },
+  ]
+  const migrated = validateArchive(a)
+  assert.deepEqual(migrated.measurements.map(m => [m.id, m.value, m.adopted]), a.measurements.map(m => [m.id, m.value, m.adopted]))
+  assert.equal(migrated.measurements[0].label, migrated.measurements[1].label)
+  assert.match(migrated.measurements[0].label, /水槽旁/)
+  assert.equal(new Set(migrated.measurements.filter(m => m.adopted).map(m => m.label)).size, 4)
+  assert.ok(migrated.measurements.every(m => !Object.hasOwn(m, 'zoneId')))
+  assert.deepEqual(validateArchive(migrated), migrated)
+  assert.throws(() => validateArchive({ ...a, measurements: [...a.measurements, { ...a.measurements[1], id: 'duplicate' }] }), /只能采信一个值/)
+  assert.throws(() => validateArchive({ ...migrated, measurements: [...migrated.measurements, { ...migrated.measurements[1], id: 'duplicate' }] }), /只能采信一个值/)
 })
