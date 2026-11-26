@@ -4,11 +4,12 @@ import { build } from 'esbuild'
 const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 
 await build({
-  entryPoints: ['src/index.ts'],
-  outfile: 'dist/index.js',
+  entryPoints: ['src/index.ts', 'src/expert-team-preset.ts'],
+  outdir: 'dist',
   bundle: true,
   platform: 'node',
   format: 'esm',
+  loader: { '.md': 'text' },
 })
 
 // DSH loads a factory per browser plugin and supplies React through its require.

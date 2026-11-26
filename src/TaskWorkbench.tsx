@@ -142,7 +142,7 @@ export function TaskWorkbench({ service, onAsk }: { service: TaskService, onAsk:
 
   return <section className="ih-task-workbench" aria-label="业主任务与日历"><style>{css}</style>
     <div className="ih-task-toolbar"><button className="ih-task-primary" disabled={!board || busy} onClick={addTask}>添加任务</button>
-      <button onClick={() => onAsk('请帮我梳理装修中需要我处理的任务，先了解当前进度和近期安排。通过 ihome_read_tasks 查看已有任务，用 ihome_propose_task 在对话中展示具体修改，由我接受后保存。日期不确定时保留未排期。')}>和助理聊聊</button>
+      <button onClick={() => onAsk('/任务待办助理 请帮我梳理装修中需要我处理的任务，先了解当前进度和近期安排，结合已有任务给出建议。日期不确定时先保留未排期，需要修改资料时请在对话中让我确认。')}>和助理聊聊</button>
       <small role="status">{busy ? '正在保存…' : saved ? '已保存到本机' : ''}</small></div>
     {error && !editing && !removing && <div className="ih-task-error" role="alert">{error}<button disabled={busy} onClick={() => void refresh()}>重新载入</button></div>}
     {!board ? <p role="status">{error ? '任务暂时无法打开。' : '正在读取任务…'}</p> : <>

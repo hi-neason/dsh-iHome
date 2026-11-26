@@ -1,3 +1,16 @@
 - insert:
     - id: ihome
       name: dsh-ihome
+    - id: ihome-needs-analyst-preset
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: ihome-needs-analyst
+        name: iHome专家团
+        description: 在同一会话中调度需求分析师和任务待办助理。
+        plugins:
+          - id: ihome-native-tools
+            name: '@deepseek-ai/dsh-tool-executor-native'
+          - id: ihome-needs-analyst
+            name: dsh-ihome/expert-team-preset
+          - id: ihome-skill-tool
+            name: '@deepseek-ai/dsh-tool-skill'

@@ -9,12 +9,17 @@
     "./client": "./dist/client.js",
     "./package.json": "./package.json",
     "./cordis.patch.yml": "./cordis.patch.yml",
-    "./locale/*.json": "./locale/*.json"
+    "./locale/*.json": "./locale/*.json",
+    "./expert-team-preset": "./dist/expert-team-preset.js",
+    "./needs-analyst-preset": "./dist/expert-team-preset.js"
   },
   "files": [
-    "dist",
+    "dist/index.js",
+    "dist/client.js",
+    "dist/expert-team-preset.js",
     "cordis.patch.yml",
-    "locale/*.json"
+    "locale/*.json",
+    "skills"
   ],
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
@@ -45,7 +50,10 @@
         "@deepseek-ai/dsh-client-ui-workspace",
         "@deepseek-ai/dsh-client-ui-sidebar-right",
         "@deepseek-ai/dsh-client-ui-conversation",
-        "@deepseek-ai/dsh-api-session-controller"
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-input-trigger",
+        "@deepseek-ai/dsh-client-locale"
       ]
     }
   }

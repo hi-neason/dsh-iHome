@@ -20,7 +20,8 @@ export interface NavigationContext {
 }
 
 export function createIHomeNavigation(ctx: NavigationContext) {
-  let snapshot: Partial<Record<ModuleId, string>> = {}
+  type SessionIndex = Pick<IHomeWorkspace, 'moduleSessions' | 'previousModuleSessions'> & { selectedModules: Record<string, ModuleId> }
+  let snapshot: SessionIndex = { moduleSessions: {}, previousModuleSessions: {}, selectedModules: {} }
   const listeners = new Set<() => void>()
   let initialization: Promise<void> | undefined
   let disposed = false
@@ -32,7 +33,7 @@ export function createIHomeNavigation(ctx: NavigationContext) {
     })
     return response.json() as Promise<T>
   }
-  function publish(next: Partial<Record<ModuleId, string>>) {
+  function publish(next: SessionIndex) {
     if (disposed) return
     snapshot = next
     listeners.forEach(listener => listener())
@@ -40,7 +41,7 @@ export function createIHomeNavigation(ctx: NavigationContext) {
   function initialize(): Promise<void> {
     return initialization ??= request<IHomeWorkspace>('workspace').then(workspace => {
       if (!workspace.moduleSessions || !workspace.workspaceId) throw new Error('iHome 工作区响应无效。')
-      publish({ ...workspace.moduleSessions, ...snapshot })
+      publish({ ...snapshot, moduleSessions: workspace.moduleSessions, previousModuleSessions: workspace.previousModuleSessions ?? {} })
     }).catch(error => { initialization = undefined; throw error })
   }
   return {
@@ -48,16 +49,19 @@ export function createIHomeNavigation(ctx: NavigationContext) {
     getSnapshot: () => snapshot,
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
     dispose() { disposed = true; opening++; listeners.clear() },
-    async openModule(moduleId: ModuleId) {
+    async openModule(moduleId: ModuleId, previousSessionId?: string) {
       if (!modules.some(module => module.id === moduleId)) throw new Error('请选择一个 iHome 功能模块。')
       const revision = ++opening
       const navigation = ctx.layout.beginNavigation()
       await initialize()
-      const result = await request<IHomeModuleSession>('module-session', { moduleId })
+      const result = await request<IHomeModuleSession>('module-session', { moduleId, previousSessionId })
       if (result.moduleId !== moduleId || !result.sessionId) throw new Error('iHome 模块会话响应无效。')
-      publish({ ...snapshot, [moduleId]: result.sessionId })
+      publish({ ...snapshot,
+        moduleSessions: result.moduleSessions ?? { ...snapshot.moduleSessions, [moduleId]: result.activeSessionId ?? result.sessionId },
+        previousModuleSessions: result.previousModuleSessions ?? { ...snapshot.previousModuleSessions, [moduleId]: result.previousSessionIds ?? [] } })
       await ctx.sessions.refresh()
       if (disposed || revision !== opening || navigation.aborted) return
+      publish({ ...snapshot, selectedModules: { ...snapshot.selectedModules, [result.sessionId]: moduleId } })
       ctx.uiWorkspace.openSession(result.sessionId)
       // openSession selects the native chat panel and ends the preceding navigation.
       const surfaceNavigation = ctx.layout.beginNavigation()
@@ -74,7 +78,8 @@ export function createIHomeNavigation(ctx: NavigationContext) {
       }
     },
     async prepareDraft(sessionId: string, prompt: string) {
-      if (!Object.values(snapshot).includes(sessionId)) throw new Error('请先选择一个 iHome 模块。')
+      if (!Object.values(snapshot.moduleSessions).includes(sessionId) && !Object.values(snapshot.previousModuleSessions).some(ids => ids.includes(sessionId)))
+        throw new Error('请先选择一个 iHome 模块。')
       const reference = ctx.sessions.retain(sessionId, { source: 'ihome' })
       try {
         const binding = await reference.ready

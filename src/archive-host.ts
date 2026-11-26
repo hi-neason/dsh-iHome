@@ -1,3 +1,4 @@
+import { allowedExpertTools } from './expert-dispatch'
 import { prepareArchiveChange, createArchive, validateArchive, assertCurrentHouse, attachmentStage, documentStages } from './archive-model'
 import type { Archive, ArchiveFile } from './archive-model'
 import { isIHomeToolContext, type IHomeToolContext } from './ihome-workspace-path'
@@ -138,9 +139,10 @@ export async function mountArchive(ctx: ArchiveHostContext): Promise<void> {
         async execute(args, execution) {
           execution.signal.throwIfAborted()
           if (!isIHomeToolContext(execution)) throw new Error('iHome 工具仅在 iHome工作区内可用。')
+          if (!allowedExpertTools(execution).has(tool.name)) throw new Error('当前专家没有使用这个工具的权限。')
           return tool.execute(args, execution)
         },
-      }, { when: isIHomeToolContext })
+      }, { when: context => allowedExpertTools(context).has(tool.name) })
       const route = (handler: (request: Request) => Promise<Response>) => async (request: Request) => {
         try {
           request.signal.throwIfAborted()

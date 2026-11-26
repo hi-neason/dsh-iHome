@@ -50,7 +50,20 @@ test('navigating elsewhere during host creation prevents late session takeover',
 test('restored sessions resolve module from persistent host index', async t => {
   const { navigation } = fixture(t, normal)
   await navigation.initialize()
-  assert.equal(navigation.getSnapshot().archive, 'archive-session')
+  assert.equal(navigation.getSnapshot().moduleSessions.archive, 'archive-session')
+})
+
+test('opening a previous conversation retains the active preset session and its workbench', async t => {
+  const { navigation, calls } = fixture(t, (url, body) => url.endsWith('workspace')
+    ? { workspaceId: 'ihome', moduleSessions: { archive: 'native' }, previousModuleSessions: { archive: ['old'] } }
+    : { workspaceId: 'ihome', moduleId: 'archive', sessionId: body.previousSessionId ?? 'native',
+        activeSessionId: 'native', previousSessionIds: ['old'] })
+  await navigation.openModule('archive', 'old')
+  assert.deepEqual(calls.slice(-2), [['session', 'old'], ['tab', 'ihome-workbench']])
+  await navigation.prepareDraft('old', '接着整理')
+  assert.equal(navigation.getSnapshot().moduleSessions.archive, 'native')
+  await navigation.openModule('archive')
+  assert.deepEqual(calls.slice(-2), [['session', 'native'], ['tab', 'ihome-workbench']])
 })
 
 test('draft reference releases when native input blocks', async t => {
@@ -59,4 +72,19 @@ test('draft reference releases when native input blocks', async t => {
   ctx.conversation.input.requestDraftInitialization = () => 'blocked'
   await assert.rejects(navigation.prepareDraft('archive-session', '需求'), /无法填写草稿/)
   assert.deepEqual(calls.at(-1), ['release'])
+})
+
+
+test('both expert entrances share the chat and select their own workbench', async t => {
+  const moduleSessions = { archive: 'team', tasks: 'team' }
+  const { navigation, calls } = fixture(t, (url, body) => url.endsWith('workspace')
+    ? { workspaceId: 'ihome', moduleSessions }
+    : { workspaceId: 'ihome', moduleId: body.moduleId, sessionId: 'team', activeSessionId: 'team',
+        moduleSessions, previousModuleSessions: {} })
+  await navigation.openModule('tasks')
+  assert.equal(navigation.getSnapshot().selectedModules.team, 'tasks')
+  assert.deepEqual(navigation.getSnapshot().moduleSessions, moduleSessions)
+  await navigation.openModule('archive')
+  assert.equal(navigation.getSnapshot().selectedModules.team, 'archive')
+  assert.deepEqual(calls.filter(call => call[0] === 'session'), [['session', 'team'], ['session', 'team']])
 })

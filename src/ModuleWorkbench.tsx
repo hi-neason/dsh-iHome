@@ -11,14 +11,17 @@ import homeCss from './home.css'
 
 interface WorkbenchProps {
   id: ModuleId | null
+  sharedTeam?: boolean
   archiveService: ArchiveService
   taskService: TaskService
   onAsk: (prompt: string) => void
   onOpenModule: OpenModule
+  historyLinks?: { label: string, open(): void }[]
 }
 
 /** The DSH detail pane provides its own tab header and resizing controls. */
-export function ModuleWorkbench({ id, archiveService, taskService, onAsk, onOpenModule }: WorkbenchProps) {
+export function ModuleWorkbench({ id, archiveService, taskService, onAsk, onOpenModule, historyLinks, sharedTeam }: WorkbenchProps) {
+  const [navigationError, setNavigationError] = useState('')
   const [choosing, setChoosing] = useState(false)
   const module = modules.find(item => item.id === id)
   const showDirectory = !module || choosing
@@ -32,6 +35,15 @@ export function ModuleWorkbench({ id, archiveService, taskService, onAsk, onOpen
           {choosing ? '返回' + module.title : '切换专家'}
         </button>}
       </header>
+      {sharedTeam && !showDirectory && <nav className="ih-team-workbench-tabs" aria-label="专家团工作台">
+        {(['archive', 'tasks'] as const).map(next => <button type="button" key={next}
+          aria-pressed={id === next} onClick={() => {
+            setNavigationError('')
+            void Promise.resolve(onOpenModule(next)).catch(error => setNavigationError(String(error.message ?? error)))
+          }}>{next === 'archive' ? '居住需求' : '任务待办'}</button>)}
+      </nav>}
+      {navigationError && <p role="alert">{navigationError}</p>}
+      {!showDirectory && historyLinks?.map(link => <button key={link.label} className="ih-workbench-history" type="button" onClick={link.open}>{link.label}</button>)}
       {showDirectory ? <nav aria-label="切换装修专家"><ModuleTiles onOpenModule={async next => {
         await onOpenModule(next)
         setChoosing(false)

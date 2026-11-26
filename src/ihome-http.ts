@@ -16,5 +16,8 @@ export async function requestIHome(path: string, init: RequestInit = {}): Promis
     const body = await response.json()
     if (typeof body?.error === 'string') message = body.error
   } catch { /* A bridge error can have a plain-text response. */ }
+  if (response.status === 404 && path === 'agent-settings') {
+    message = 'DSH 尚未加载 iHome 专家设置接口（404）。请完整退出并重新打开 DeepSeek Harness，再进入「设置 → iHome」。'
+  }
   throw Object.assign(new Error(message), { status: response.status })
 }

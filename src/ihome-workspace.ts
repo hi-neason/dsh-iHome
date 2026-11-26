@@ -1,8 +1,9 @@
 import { mkdir } from 'node:fs/promises'
-import { iHomeWorkspacePath } from './ihome-workspace-path.ts'
+import { iHomeWorkspacePath, isIHomeToolContext } from './ihome-workspace-path.ts'
 import { modules, type ModuleId } from './modules.ts'
+import { IHOME_TEAM_PRESET_ID, publicAgentPresets } from './agent-presets.ts'
 
-interface ModuleSession { sessionId: string, ready: boolean, roleTitle?: string }
+interface ModuleSession { sessionId: string, ready: boolean, roleTitle?: string, previousSessionIds?: string[] }
 export interface WorkspaceState { sessions: Partial<Record<ModuleId, ModuleSession>> }
 interface StateTable {
   get(key: string): WorkspaceState | undefined
@@ -16,12 +17,14 @@ interface Workspace {
   setTitle(title: string): Promise<void>
   attachSession(sessionId: string): Promise<void>
 }
-interface Header { id: string, cwd?: string }
+interface Header { id: string, cwd?: string, agentPreset?: string }
+interface Session { id: string, header: Header }
 export interface WorkspaceHostContext {
+  agentPresets: { readonly defaultId: string, presetForSession(session: Session): string | null }
   systemPrompt: {
     getSectionOrder(name: 'DEPLOYMENT_PERSONA_SUFFIX'): number
     section(section: { name: string, order: number, interpolate: false,
-      text(context: { agent?: { session: { id: string } } }): string }): () => void
+      text(context: { agent?: { session: Session } }): string }): () => void
   }
   workspaceRegistry: {
     create(path: string, title?: string): Promise<Workspace>
@@ -33,8 +36,8 @@ export interface WorkspaceHostContext {
     flush(): Promise<void>
   }
   sessionController: {
-    create(request: { workspaceId: string, sessionId: string }): Promise<{ sessionId: string }>
-    projections(request: { sessionId: string }, signal: AbortSignal): Promise<{ kind: string, values: { title?: string | null } } | null>
+    create(request: { workspaceId: string, sessionId: string, agentPreset?: string }): Promise<{ sessionId: string, agentPreset?: string }>
+    projections(request: { sessionId: string }, signal: AbortSignal): Promise<{ kind: string, values: { title?: string | null, agentPreset?: string | null } } | null>
     rename(request: { sessionId: string, title: string }): Promise<unknown>
   }
   storageDomain: {
@@ -57,8 +60,9 @@ export interface IHomeWorkspace {
   path: string
   title: string
   moduleSessions: Partial<Record<ModuleId, string>>
+  previousModuleSessions: Partial<Record<ModuleId, string[]>>
 }
-export interface IHomeModuleSession { workspaceId: string, path: string, moduleId: ModuleId, sessionId: string }
+export interface IHomeModuleSession { workspaceId: string, path: string, moduleId: ModuleId, sessionId: string, activeSessionId: string, previousSessionIds: string[], moduleSessions?: IHomeWorkspace['moduleSessions'], previousModuleSessions?: IHomeWorkspace['previousModuleSessions'] }
 
 function parseState(value: unknown): WorkspaceState {
   if (!value || typeof value !== 'object' || !('sessions' in value)
@@ -71,7 +75,11 @@ function parseState(value: unknown): WorkspaceState {
     if (!entry || typeof entry !== 'object' || !('sessionId' in entry) || typeof entry.sessionId !== 'string'
       || !entry.sessionId || !('ready' in entry) || typeof entry.ready !== 'boolean')
       throw new Error('iHome 模块会话记录格式无效。')
+    if ('previousSessionIds' in entry && (!Array.isArray(entry.previousSessionIds)
+      || entry.previousSessionIds.some(id => typeof id !== 'string' || !id || id === entry.sessionId)))
+      throw new Error('iHome 历史会话索引无效。')
     sessions[id] = { sessionId: entry.sessionId, ready: entry.ready,
+      ...('previousSessionIds' in entry ? { previousSessionIds: [...new Set<string>(entry.previousSessionIds as string[])] } : {}),
       ...('roleTitle' in entry && typeof entry.roleTitle === 'string' ? { roleTitle: entry.roleTitle } : {}) }
   }
   return { sessions }
@@ -84,13 +92,13 @@ function moduleId(value: unknown): ModuleId {
 
 // Previous default titles of sessions created before roleTitle was stored.
 const legacyTitles: Partial<Record<ModuleId, readonly string[]>> = {
-  archive: ['家庭档案库', '家庭档案管理员', '家庭需求分析师'], design: ['设计工作室'], quotes: ['选商、报价与合同'],
+  archive: ['家庭档案库', '家庭档案管理员', '家庭需求分析师', '需求分析师'], design: ['设计工作室'], quotes: ['选商、报价与合同'],
   materials: ['选材与采购'], site: ['施工计划与现场'], handover: ['验收、交付与保修'],
   knowledge: ['装修知识库'], documents: ['档案文档管理员'],
 }
 
 const roleInstructions: Record<ModuleId, string> = {
-  archive: '从真实生活中的困扰开始，每次追问一个具体问题。每条需求至少关联一位家人和至少一个房间或区域。书房、玄关、阅读区都可以直接作为独立空间，可以多选。保留用户原话及不同意见，区分必须满足、尽量满足和待商量。未知尺寸、日期和来源继续询问。',
+  archive: '从家人的实际生活场景出发，每次追问一个具体问题，澄清居住需求。每条需求至少关联一位家人和至少一个房间或区域，房间与区域是同一层级。保留不同家人的意见和用户原话，未知信息继续询问。',
   knowledge: '解答各装修阶段的通用问题，用业主能理解的语言解释术语、做法和取舍。涉及标准时说明依据和适用条件；需要结合用户家情况才能判断时，先补齐相关信息。',
   documents: '管理设计、选商、施工、验收和入住各阶段产生的文档及物料资料。协助用户按阶段、房间或区域、来源和用途归档与查找，保留文件版本和依据关系。用 ihome_read_archive 的 documentQuery、documentStage、documentKind 查找文件名称、来源与备注。需要阅读正文时请用户提供原件，导入与编辑在右侧工作台完成。',
   tasks: '把业主需要做的事记成具体任务，协助安排日期、改期和跟进完成进度。用户尚未决定日期时可记录为未排期。用 ihome_read_tasks 查询任务、状态和日期范围，核对同名任务。修改前先取最新 revision，再用 ihome_propose_task 提交新增、更新或删除建议。用户在对话中接受后，依据工具返回的结果说明是否保存。只有业主明确说已完成时才标记完成。',
@@ -103,9 +111,10 @@ const roleInstructions: Record<ModuleId, string> = {
   movein: '结合家庭成员、交付状态与物品清单安排保洁、搬运、收纳和入住。跟进未整改问题，整理设备启用、保修联系人及维护周期；入住条件依据实际检测和交付资料核实。',
 }
 
-export function moduleSessionPrompt(state: WorkspaceState, sessionId: string | undefined): string {
-  if (!sessionId) return ''
-  const module = modules.find(item => state.sessions[item.id]?.sessionId === sessionId)
+export function moduleSessionPrompt(state: WorkspaceState, sessionId: string | undefined, currentPreset?: string | null): string {
+  if (!sessionId || currentPreset === IHOME_TEAM_PRESET_ID) return ''
+  const module = modules.find(item => state.sessions[item.id]?.sessionId === sessionId
+    || state.sessions[item.id]?.previousSessionIds?.includes(sessionId))
   if (!module) return ''
   const intro = '你是 iHome 装修专家团中的「' + module.title + '」，在 iHome工作区帮助业主' + module.description + '。' + roleInstructions[module.id]
   if (module.id === 'tasks') return intro + '设备本地日期为 ' + new Date().toLocaleDateString('sv-SE') + '。用户可以在右侧工作台的任务列表和日历中查看或直接编辑任务。'
@@ -116,7 +125,7 @@ export function moduleSessionPrompt(state: WorkspaceState, sessionId: string | u
 
 /** Serializes workspace creation and durably reserves a Session ID before creation. */
 export function createWorkspaceManager(
-  ctx: Pick<WorkspaceHostContext, 'workspaceRegistry' | 'sessionController' | 'sessionPersistence' | 'sessions'>,
+  ctx: Pick<WorkspaceHostContext, 'workspaceRegistry' | 'sessionController' | 'sessionPersistence' | 'sessions' | 'agentPresets'>,
   table: StateTable,
   directory: string,
 ) {
@@ -133,32 +142,57 @@ export function createWorkspaceManager(
     return value
   }
   function state() { return table.get('home') ?? { sessions: {} } }
-  async function ensureSession(id: ModuleId): Promise<IHomeModuleSession> {
+  async function headerFor(sessionId: string) {
+    return ctx.sessions.get(sessionId)?.header ?? (await ctx.sessionPersistence.stat(sessionId))?.header
+  }
+  async function ensureSession(id: ModuleId, previousId?: string): Promise<IHomeModuleSession> {
     const target = await workspace()
     let entry = state().sessions[id]
-    let header = entry
-      ? ctx.sessions.get(entry.sessionId)?.header ?? (await ctx.sessionPersistence.stat(entry.sessionId))?.header
-      : undefined
+    const previousSessionIds = [...(entry?.previousSessionIds ?? [])]
+    const resultFor = (sessionId: string, activeSessionId: string) =>
+      ({ workspaceId: target.id, path: target.path, moduleId: id, sessionId, activeSessionId, previousSessionIds })
+    if (previousId !== undefined) {
+      if (!entry || !previousSessionIds.includes(previousId) || (await headerFor(previousId))?.cwd !== target.path)
+        throw new Error('这个专家的历史会话已不可用。')
+      await ctx.workspaceRegistry.unarchiveSession(previousId)
+      return resultFor(previousId, entry.sessionId)
+    }
+    const preset = id === 'archive' ? publicAgentPresets[0] : undefined
+    let header = entry ? await headerFor(entry.sessionId) : undefined
     if (header && header.cwd !== target.path) throw new Error('模块会话的工作区已变化，请先核对该会话。')
+    if (entry && header && preset) {
+      // A blank session can be reassigned in the native preset picker after creation.
+      const snapshot = await ctx.sessionController.projections({ sessionId: entry.sessionId }, new AbortController().signal)
+      if (snapshot?.kind === 'migration-required' || (snapshot?.values.agentPreset ?? header.agentPreset) !== preset.id) {
+        previousSessionIds.unshift(entry.sessionId)
+        entry = undefined
+        header = undefined
+      }
+    }
     if (!header) {
       // A missing ready Session was deleted. Reserve its replacement before making
       // external writes, so an interrupted create retries the same blank identity.
       if (!entry || entry.ready) {
-        entry = { sessionId: crypto.randomUUID(), ready: false }
+        entry = { sessionId: crypto.randomUUID(), ready: false, ...(previousSessionIds.length ? { previousSessionIds } : {}) }
         await table.put('home', { sessions: { ...state().sessions, [id]: entry } })
       }
-      const created = await ctx.sessionController.create({ workspaceId: target.id, sessionId: entry.sessionId })
+      // A user may select the team as DSH's global default. Legacy experts
+      // still need the desktop's general composition for their own tools.
+      const agentPreset = preset?.id ?? (ctx.agentPresets.defaultId === IHOME_TEAM_PRESET_ID ? 'standard' : undefined)
+      const created = await ctx.sessionController.create({ workspaceId: target.id, sessionId: entry.sessionId,
+        ...(agentPreset ? { agentPreset } : {}) })
+      if (preset && created.agentPreset !== preset.id) throw new Error('DSH 未加载 iHome专家团预设，请检查 iHome 插件。')
       if (created.sessionId !== entry.sessionId) {
-        entry = { sessionId: created.sessionId, ready: false }
+        entry = { ...entry, sessionId: created.sessionId }
         await table.put('home', { sessions: { ...state().sessions, [id]: entry } })
       }
-      header = ctx.sessions.get(entry.sessionId)?.header ?? (await ctx.sessionPersistence.stat(entry.sessionId))?.header
+      header = await headerFor(entry.sessionId)
       if (!header || header.cwd !== target.path) throw new Error('模块会话创建后尚未就绪，请重试。')
     }
     if (!entry) throw new Error('模块会话索引丢失，请重试。')
     await target.attachSession(entry.sessionId)
     await ctx.workspaceRegistry.unarchiveSession(entry.sessionId)
-    const title = modules.find(module => module.id === id)!.title
+    const title = preset?.title ?? modules.find(module => module.id === id)!.title
     if (!entry.ready || entry.roleTitle !== title) {
       let rename = !entry.ready
       if (entry.ready) {
@@ -174,21 +208,44 @@ export function createWorkspaceManager(
       }
       await table.put('home', { sessions: { ...state().sessions, [id]: { ...entry, ready: true, roleTitle: title } } })
     }
-    return { workspaceId: target.id, path: target.path, moduleId: id, sessionId: entry.sessionId }
+    return resultFor(entry.sessionId, entry.sessionId)
+  }
+  function sessionIndex() {
+    const moduleSessions: IHomeWorkspace['moduleSessions'] = {}
+    const previousModuleSessions: IHomeWorkspace['previousModuleSessions'] = {}
+    for (const { id } of modules) {
+      const entry = state().sessions[id]
+      if (entry?.ready) moduleSessions[id] = entry.sessionId
+      if (entry?.previousSessionIds?.length) previousModuleSessions[id] = entry.previousSessionIds
+    }
+    return { moduleSessions, previousModuleSessions }
+  }
+  async function openModule(id: ModuleId, previousId?: string): Promise<IHomeModuleSession> {
+    if (id !== 'archive' && id !== 'tasks') return ensureSession(id, previousId)
+    // Historical conversations remain independently addressable. The current
+    // archive identity is retained so existing native preset conversations resume.
+    if (previousId !== undefined) return { ...await ensureSession(id, previousId), ...sessionIndex() }
+    const result = await ensureSession('archive')
+    const sessions = state().sessions
+    const tasks = sessions.tasks
+    const previousSessionIds = [...new Set([
+      ...(tasks && tasks.sessionId !== result.sessionId && await headerFor(tasks.sessionId) ? [tasks.sessionId] : []),
+      ...(tasks?.previousSessionIds ?? []),
+    ])].filter(sessionId => sessionId !== result.sessionId)
+    await table.put('home', { sessions: { ...sessions, tasks: {
+      sessionId: result.sessionId, ready: true, roleTitle: 'iHome专家团', previousSessionIds,
+    } } })
+    return { ...result, moduleId: id,
+      previousSessionIds: state().sessions[id]?.previousSessionIds ?? [], ...sessionIndex() }
   }
   return {
     ensure(): Promise<IHomeWorkspace> {
       return enqueue(async () => {
         const target = await workspace()
-        const moduleSessions: IHomeWorkspace['moduleSessions'] = {}
-        for (const { id } of modules) {
-          const entry = state().sessions[id]
-          if (entry?.ready) moduleSessions[id] = entry.sessionId
-        }
-        return { workspaceId: target.id, path: target.path, title: target.title, moduleSessions }
+        return { workspaceId: target.id, path: target.path, title: target.title, ...sessionIndex() }
       })
     },
-    open(id: unknown): Promise<IHomeModuleSession> { return enqueue(() => ensureSession(moduleId(id))) },
+    open(id: unknown, previousId?: string): Promise<IHomeModuleSession> { return enqueue(() => openModule(moduleId(id), previousId)) },
     settled(): Promise<unknown> { return tail },
   }
 }
@@ -212,7 +269,9 @@ export async function mountIHomeWorkspace(ctx: WorkspaceHostContext): Promise<vo
       disposers.push(ctx.systemPrompt.section({
         name: 'ihome:module', order: ctx.systemPrompt.getSectionOrder('DEPLOYMENT_PERSONA_SUFFIX'),
         interpolate: false,
-        text: ({ agent }) => moduleSessionPrompt(table.get('home') ?? { sessions: {} }, agent?.session.id),
+        text: ({ agent }) => agent && isIHomeToolContext({ agent })
+          ? moduleSessionPrompt(table.get('home') ?? { sessions: {} }, agent.session.id, ctx.agentPresets.presetForSession(agent.session))
+          : '',
       }))
       disposers.push(ctx.connection.fetch.register({
         path: '/api/ihome/workspace', methods: ['POST'], requestBody: 'buffered',
@@ -224,7 +283,8 @@ export async function mountIHomeWorkspace(ctx: WorkspaceHostContext): Promise<vo
           const body: unknown = await request.json()
           if (!body || typeof body !== 'object' || !('moduleId' in body)) throw new Error('缺少模块名称。')
           request.signal.throwIfAborted()
-          return manager.open(body.moduleId)
+          if ('previousSessionId' in body && typeof body.previousSessionId !== 'string') throw new Error('历史会话编号无效。')
+          return manager.open(body.moduleId, 'previousSessionId' in body ? body.previousSessionId as string : undefined)
         }),
       }))
       return async () => {

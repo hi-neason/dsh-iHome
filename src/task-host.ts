@@ -1,3 +1,4 @@
+import { allowedExpertTools } from './expert-dispatch'
 import type { ArchiveHostContext, ArchiveTool } from './archive-host'
 import { isIHomeToolContext } from './ihome-workspace-path'
 import { prepareTaskChange, queryTasks, TaskConflict, validateTaskBoard, type TaskBoard } from './task-model'
@@ -48,8 +49,9 @@ export async function mountTasks(ctx: TaskHostContext): Promise<void> {
       const register = (tool: ArchiveTool) => ctx.tools.register({ ...tool, async execute(args, execution) {
         execution.signal.throwIfAborted()
         if (!isIHomeToolContext(execution)) throw new Error('iHome 工具仅在 iHome工作区内可用。')
+        if (!allowedExpertTools(execution).has(tool.name)) throw new Error('当前专家没有使用这个工具的权限。')
         return tool.execute(args, execution)
-      } }, { when: isIHomeToolContext })
+      } }, { when: context => allowedExpertTools(context).has(tool.name) })
       disposers.push(ctx.connection.fetch.register({ path: '/api/ihome/tasks', methods: ['GET', 'POST'], requestBody: 'buffered',
         async fetch(request) {
           try {
