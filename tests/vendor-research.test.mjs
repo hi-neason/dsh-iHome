@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { auditDateToday } from '../src/quote-audit.ts'
 import { parseVendorResearch, vendorResearchPrompt } from '../src/vendor-research.ts'
 
 const source = {
@@ -41,8 +42,15 @@ test('prepares an explicitly scoped draft and does not include unrelated private
   const prompt = vendorResearchPrompt(vendor, '重庆', '江北门店', '增项和售后', 'https://example.org/start\nhttps://example.org/start')
   assert.match(prompt, /^\/选商核价分析师 /)
   const scope = JSON.parse(prompt.split('\n')[1])
-  assert.deepEqual(scope, { vendorId: vendor.id, company: vendor.name, city: '重庆', branch: '江北门店', focus: '增项和售后', urls: ['https://example.org/start'] })
+  assert.deepEqual(scope, { vendorId: vendor.id, company: vendor.name, city: '重庆', branch: '江北门店', focus: '增项和售后', urls: ['https://example.org/start'], requestedOn: auditDateToday() })
   assert.doesNotMatch(prompt, /私人电话|13000000000|合同地址/)
   assert.throws(() => vendorResearchPrompt(vendor, '', '', '', ''), /城市/)
   assert.throws(() => vendorResearchPrompt(vendor, '重庆', '', '', 'data:text/plain,test'), /HTTP/)
+})
+
+test('warns before sending a combined set of valid links beyond the expert task limit', () => {
+  const vendor = { id: 'v1', name: '示例公司' }
+  const links = Array.from({ length: 4 }, (_, i) => 'https://example.org/' + i + 'a'.repeat(2975))
+  assert.ok(vendorResearchPrompt(vendor, '重庆', '', '', links.slice(0, 3).join('\n')).length < 12000)
+  assert.throws(() => vendorResearchPrompt(vendor, '重庆', '', '', links.join('\n')), /分批提交网页线索/)
 })

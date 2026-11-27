@@ -1,3 +1,4 @@
+import { auditDateToday } from './quote-audit.ts'
 import { quoteObject, quoteText, type QuoteVendor } from './quote-model.ts'
 
 export const researchSourceKinds = { owner: '业主自述', merchant: '商家自述', official: '官方公开信息', other: '第三方信息' } as const
@@ -81,8 +82,10 @@ export function vendorResearchPrompt(vendor: Pick<QuoteVendor, 'id' | 'name'>, c
   const target = {
     vendorId: vendor.id, company: vendor.name, city: quoteText(city, '调研城市', true, 100),
     branch: quoteText(branch, '门店或区域', false, 200), focus: quoteText(focus, '关注事项', false, 1000),
-    urls: urls.map(sourceUrl),
+    urls: urls.map(sourceUrl), requestedOn: auditDateToday(),
   }
-  return '/选商核价分析师 请按 ihome-vendor-research 调研这家装修公司的网上评价。\n'
+  const task = '请按 ihome-vendor-research 调研这家装修公司的网上评价。\n'
     + JSON.stringify(target) + '\n先读取该公司已有报告，检索公开信息并打开原文，区分目标公司、其他门店和待核线索。按来源说明发现、样本局限及待问问题，交由主会话预览确认归档。'
+  if (task.length > 12000) throw new Error('调研请求超过 12000 字，请减少或分批提交网页线索。')
+  return '/选商核价分析师 ' + task
 }

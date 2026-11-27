@@ -3,7 +3,7 @@ import { quoteDocumentInfo } from './quote-documents.ts'
 import type { ArchiveHostContext, ArchiveTool } from './archive-host'
 import { allowedExpertTools } from './expert-dispatch.ts'
 import { compareQuotes } from './quote-analysis.ts'
-import { auditQuote } from './quote-audit.ts'
+import { auditDateToday, auditQuote } from './quote-audit.ts'
 import { changeQuoteBoard, QuoteConflict, quoteCollections, quoteObject, type QuoteBoard, type QuoteCollection } from './quote-model.ts'
 import { quoteStatusLabels } from './quote-version.ts'
 
@@ -135,7 +135,7 @@ export function registerQuoteTools(
         required: ['vendorId', 'documentIds'], properties: { vendorId: { type: 'string' }, documentIds: { type: 'array', items: { type: 'string' } },
           quoteId: { type: ['string','null'] }, researchId: { type: ['string','null'] } } } },
       quoteIds: { type: 'array', minItems: 2, uniqueItems: true, items: { type: 'string' } } } }, output,
-    async execute(raw) { return readQuotes(read(), raw) },
+    async execute(raw) { return { today: auditDateToday(), ...readQuotes(read(), raw) } },
   })
   register({ name: 'ihome_propose_quote', description: '在当前主会话向业主展示修改，接受后保存。先读最新 revision，再传 expectedRevision、collection 和 record。' + recordDescription,
     parameters: { type: 'object', additionalProperties: false, required: ['expectedRevision', 'collection', 'record'], properties: {
