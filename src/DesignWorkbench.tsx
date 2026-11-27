@@ -112,7 +112,7 @@ export function DesignWorkbench({ onAsk, archive }: { archive: ArchiveService, o
   return <section ref={panel} aria-busy={busy} className="ih-design" aria-label="户型设计工作台">
     <style>{css}</style>
     <header className="ih-design-heading"><h2>{scheme.name}</h2><span>{model.floors.length} 层</span></header>
-    <DesignVersions key={scheme.id} state={state} scheme={scheme} version={version} busy={busy} change={apply} onView={viewVersion} />
+    <DesignVersions key={'versions:' + scheme.id} state={state} scheme={scheme} version={version} busy={busy} change={apply} onView={viewVersion} />
     <div className="ih-design-bar">
       <label>当前楼层 <select value={floor.id} onChange={e => { setFloorId(e.target.value); setSelectedId(null) }}>
         {model.floors.map(level => <option key={level.id} value={level.id}>{level.name}</option>)}
@@ -139,15 +139,15 @@ export function DesignWorkbench({ onAsk, archive }: { archive: ArchiveService, o
       <button aria-pressed={view === 'space'} onClick={() => setView('space')}>3D 立体图</button>
       {view === 'space' && <label><input type="checkbox" checked={allFloors} onChange={e => setAllFloors(e.target.checked)} /> 显示整栋</label>}
     </div>
-    {view === 'space' ? <DesignSpace key={scheme.id} model={model} floorId={floor.id}
+    {view === 'space' ? <DesignSpace key={'space:' + scheme.id} model={model} floorId={floor.id}
       loadAssets={loadDesignAssets} allFloors={allFloors} selectedId={selectedId} onSelect={id => {
         setSelectedId(id)
         const level = model.floors.find(value => [...value.walls, ...value.openings, ...value.items, ...(value.assets ?? [])].some(element => element.id === id))
         if (level) setFloorId(level.id)
-      }} /> : <ReferencedPlan key={version?.id ?? scheme.id} model={model} floorId={floor.id} selectedId={selectedId} onSelect={setSelectedId} onChange={replace} readonly={!!version} />}
-    <DesignReferenceEditor key={scheme.id + ':' + floor.id + ':' + (version?.id ?? state.revision)} floor={floor} archive={archive}
+      }} /> : <ReferencedPlan key={'plan:' + scheme.id + ':' + (version?.id ?? '')} model={model} floorId={floor.id} selectedId={selectedId} onSelect={setSelectedId} onChange={replace} readonly={!!version} />}
+    <DesignReferenceEditor key={'reference:' + scheme.id + ':' + floor.id + ':' + (version?.id ?? state.revision)} floor={floor} archive={archive}
       disabled={busy || !!version} save={reference => replace({ ...model, floors: model.floors.map(level => level.id === floor.id ? { ...level, reference } : level) })} />
-    <DesignAssets key={scheme.id + floor.id} model={model} floorId={floor.id} readonly={busy || !!version} onChange={replace} />
+    <DesignAssets key={'assets:' + scheme.id + ':' + floor.id} model={model} floorId={floor.id} readonly={busy || !!version} onChange={replace} />
     <DesignProjectFiles scheme={scheme} disabled={busy} onImport={async design => {
       const ok = await apply({ action: 'import', design })
       if (ok) { viewVersion(''); setFloorId('') }
