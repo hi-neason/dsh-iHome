@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { DesignVersions } from './DesignVersions'
 import { DesignSpace } from './DesignSpace'
 import { DesignPlan } from './DesignPlan'
 import { ArchiveDialog } from './ArchiveDialog'
@@ -34,6 +35,7 @@ function FloorEditor({ floor, elevation, busy, error, save, close }: {
 
 export function DesignWorkbench() {
   const [state, setState] = useState<DesignState>()
+  const [versionId, setVersionId] = useState('')
   const [floorId, setFloorId] = useState('')
   const [editor, setEditor] = useState<{ kind: 'add' | 'edit', revision: number } | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -82,9 +84,16 @@ export function DesignWorkbench() {
   }
   const scheme = state?.designs.find(item => item.id === state.activeId)
   if (!state || !scheme) return <section role="status">{error || '正在载入本地户型…'} {error && <button onClick={refresh}>重新载入</button>}</section>
-  const model = scheme.model
+  const version = scheme.versions.find(entry => entry.id === versionId)
+  const model = version?.model ?? scheme.model
+  function viewVersion(id: string) {
+    setVersionId(id)
+    setEditor(null)
+    setSelectedId(null)
+  }
   const floor = model.floors.find(level => level.id === floorId) ?? model.floors[0]
   const replace = async (value: DesignModel) => {
+    if (version) return false
     const saved = await apply({ action: 'replace', designId: scheme.id, model: value })
     if (saved) setUndo({ designId: scheme.id, revision: state.revision + 1, model })
     return saved
@@ -99,17 +108,18 @@ export function DesignWorkbench() {
   return <section ref={panel} aria-busy={busy} className="ih-design" aria-label="户型设计工作台">
     <style>{css}</style>
     <header className="ih-design-heading"><h2>{scheme.name}</h2><span>{model.floors.length} 层</span></header>
+    <DesignVersions key={scheme.id} state={state} scheme={scheme} version={version} busy={busy} change={apply} onView={viewVersion} />
     <div className="ih-design-bar">
       <label>当前楼层 <select value={floor.id} onChange={e => { setFloorId(e.target.value); setSelectedId(null) }}>
         {model.floors.map(level => <option key={level.id} value={level.id}>{level.name}</option>)}
       </select></label>
-      <button disabled={busy} onClick={() => setEditor({ kind: 'edit', revision: state.revision })}>楼层设置</button>
-      <button disabled={busy} onClick={() => setEditor({ kind: 'add', revision: state.revision })}>添加楼层</button>
+      <button disabled={busy || !!version} onClick={() => setEditor({ kind: 'edit', revision: state.revision })}>楼层设置</button>
+      <button disabled={busy || !!version} onClick={() => setEditor({ kind: 'add', revision: state.revision })}>添加楼层</button>
     </div>
     {error && <p role="alert">{error}</p>}
     <p className="ih-design-caption">标高 {floor.elevation} m · 层高 {floor.height} m · {floor.walls.length} 面墙 · {floor.openings.length} 个门窗</p>
     <div className="ih-design-bar">
-      <button type="button" disabled={busy || !canUndo} onClick={async () => {
+      <button type="button" disabled={busy || !!version || !canUndo} onClick={async () => {
         if (canUndo && await apply({ action: 'replace', designId: scheme.id, model: undo.model })) setUndo(undefined)
       }}>撤销上次编辑</button>
       {document.fullscreenEnabled && <button type="button" onClick={toggleFullscreen}>切换全屏</button>}
@@ -124,7 +134,7 @@ export function DesignWorkbench() {
         setSelectedId(id)
         const level = model.floors.find(value => [...value.walls, ...value.openings, ...value.items, ...(value.assets ?? [])].some(element => element.id === id))
         if (level) setFloorId(level.id)
-      }} /> : <DesignPlan key={scheme.id} model={model} floorId={floor.id} selectedId={selectedId} onSelect={setSelectedId} onChange={replace} />}
+      }} /> : <DesignPlan key={version?.id ?? scheme.id} model={model} floorId={floor.id} selectedId={selectedId} onSelect={setSelectedId} onChange={replace} readonly={!!version} />}
     {editor?.revision === state.revision && <FloorEditor error={error} floor={editor.kind === 'edit' ? floor : undefined}
       elevation={Math.max(...model.floors.map(level => level.elevation + level.height))}
       busy={busy} close={() => setEditor(null)} save={async next => {

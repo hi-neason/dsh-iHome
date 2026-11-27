@@ -12,3 +12,5 @@
 .ih-design [role=alert] { color:light-dark(#a02e19,#ffb09c); margin:0; }
 .ih-design:fullscreen { box-sizing:border-box; display:block; padding:clamp(16px,4vw,64px); overflow:auto; background:Canvas; color:CanvasText; }
 .ih-design:fullscreen > * { margin-bottom:12px; }
+.ih-design-versions { display:grid; gap:7px; }
+.ih-design details > summary { cursor:pointer; }
