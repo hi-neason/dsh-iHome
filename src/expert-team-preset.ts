@@ -1,6 +1,6 @@
 import { EXPERT_TEAM_SETTINGS_ID, type AgentPresetSettingsView } from './agent-presets.ts'
 import { iHomeWorkspacePath, isIHomeToolContext, type IHomeToolContext } from './ihome-workspace-path.ts'
-import { allowedExpertTools, expertRole, coordinatorTools } from './expert-dispatch'
+import { allowedExpertTools, expertRole, coordinatorTools, researchWebTools } from './expert-dispatch'
 import { skillBodies } from './expert-skill-bodies'
 
 export const name = 'ihome-expert-team'
@@ -49,7 +49,8 @@ export function apply(ctx: PresetContext): void {
   }
   // Preset revisions are ancestors of live agents. An allow-list here would also
   // mask the revision's native skill tool when viewed from a mounted agent.
-  const denied = ctx.tools.definitions().map(tool => tool.name).filter(tool => !coordinatorTools.has(tool))
+  const presetTools = new Set([...coordinatorTools, ...researchWebTools])
+  const denied = ctx.tools.definitions().map(tool => tool.name).filter(tool => !presetTools.has(tool))
   if (denied.length) ctx.tools.restrict({ deny: denied })
   // The execution guard also covers global tools registered after this preset.
   ctx.tools.guard(execution => {

@@ -70,7 +70,7 @@ function PresetEditor({ initial }: { initial: AgentPresetSettingsView }) {
           placeholder="例如，每次只问一个问题，优先处理影响近期安排的事项。"
           onChange={event => { setInstructions(event.target.value); setNotice('') }} />
       </label>
-      <p className="ih-agent-help">补充沟通方式和关注重点。档案与待办修改会在专家团主对话中由你确认。</p>
+      <p className="ih-agent-help">补充沟通方式和关注重点。通过专家修改资料时，会在主对话中请你确认。</p>
       <div className="ih-agent-skills" role="group" aria-label="技能">
         <h4>技能</h4>
         {saved.skills.map(skill => <label key={skill.id}>

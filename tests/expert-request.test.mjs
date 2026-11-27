@@ -37,6 +37,7 @@ function fixture(startError) {
 }
 
 test('explicit routing accepts only exact leading expert names', () => {
+  assert.deepEqual(parseExpertRequest('/选商核价分析师 这份报价含安装吗'), { expert: 'ihome-quotes-analyst', task: '这份报价含安装吗' })
   assert.deepEqual(parseExpertRequest('/户型设计师 画两层'), { expert: 'ihome-floorplan-designer', task: '画两层' })
   assert.deepEqual(parseExpertRequest('/需求分析师\n帮我梳理需求'), { expert: 'ihome-needs-analyst', task: '帮我梳理需求' })
   assert.equal(parseExpertRequest('引用 /需求分析师 问题'), undefined)
@@ -100,6 +101,17 @@ test('standard iHome root explicitly starts pinned expert preset with native att
   assert.equal(f.calls[0].prompt[0].text.split('帮我看看原始户型').length - 1, 1)
   assert.equal(f.agent.session.header.agentPreset, 'standard')
   assert.match(f.provider.text({ agent: f.agent }), /child-1/)
+})
+
+test('quote slash routes the supplied quotation to the analyst with its file reference', async () => {
+  const f = fixture()
+  const input = message('quote', '/选商核价分析师 核对两张报价的清运费')
+  const file = { type: 'file', name: '乙方报价.pdf', source: { type: 'attachment', id: 'quote-file' } }
+  input.content.push(file)
+  await f.step([input])
+  assert.equal(f.calls[0].provider, 'ihome-quotes-expert')
+  assert.deepEqual(f.calls[0].prompt[1], file)
+  assert.match(f.provider.text({ agent: f.agent }), /ihome-quotes-analyst/)
 })
 
 test('startup failure keeps original message and returns a failure report to its parent', async () => {

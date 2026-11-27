@@ -14,6 +14,7 @@ type PanelSlot =
   | { name: 'settings.section', id: string, order: number, label: string }
   | { name: 'settings.section.icon', id: string }
 interface ClientContext extends NavigationContext {
+  sidebarRight: NavigationContext['sidebarRight'] & { openResourceIn(sessionId: string, address: string, options: { destination: 'sidebar' }): void }
   sessions: NavigationContext['sessions'] & ExpertSlashContext['sessions']
   inputTriggers: ExpertSlashContext['inputTriggers']
   locale: ExpertSlashContext['locale']
@@ -65,7 +66,9 @@ export function apply(ctx: ClientContext): void {
     const id = snapshot.selectedModules[sessionId] ?? null
     const workbenchKey = id === 'design' ? sessionId + ':design:' + (snapshot.designEntries[sessionId] ?? 0) : sessionId + ':' + id
     return <>{error && <p role="alert">{error}</p>}
-      <ModuleWorkbench key={workbenchKey} id={id} archiveService={archiveService} taskService={taskService}
+      <ModuleWorkbench key={workbenchKey} id={id} sessionId={sessionId}
+        openDocument={address => ctx.sidebarRight.openResourceIn(sessionId, address, { destination: 'sidebar' })}
+        archiveService={archiveService} taskService={taskService}
         onOpenModule={next => navigation.openModule(next, sessionId)} onAsk={prompt => {
           setError('')
           void navigation.prepareDraft(sessionId, prompt).catch(error => setError(String(error.message ?? error)))

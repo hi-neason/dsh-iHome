@@ -14,7 +14,7 @@ const child = (provider, label = '需求分析师') => ({ session: {
 } })
 
 function fixture() {
-  const settings = Object.fromEntries([EXPERT_TEAM_SETTINGS_ID, NEEDS_ANALYST_PRESET_ID, 'ihome-floorplan-designer', TASK_ASSISTANT_PRESET_ID]
+  const settings = Object.fromEntries([EXPERT_TEAM_SETTINGS_ID, NEEDS_ANALYST_PRESET_ID, 'ihome-floorplan-designer', 'ihome-quotes-analyst', TASK_ASSISTANT_PRESET_ID]
     .map(id => [id, presetSettingsView(id, defaultPresetPreferences(id))]))
   let section, provider, restriction, guard, invalidations = 0
   const listeners = new Set(), cleanup = []
@@ -91,6 +91,7 @@ test('each role sees its own prompt and skills, with child writes and recursive 
     [root, EXPERT_TEAM_SETTINGS_ID, ['ihome-team-coordination']],
     [child('ihome-needs-expert'), NEEDS_ANALYST_PRESET_ID, ['ihome-needs-interview', 'ihome-needs-review']],
     [child('ihome-floorplan-expert'), 'ihome-floorplan-designer', ['ihome-floorplan-review', 'ihome-floorplan-modeling']],
+    [child('ihome-quotes-expert'), 'ihome-quotes-analyst', ['ihome-quote-analysis', 'ihome-vendor-research']],
     [child('ihome-task-expert'), TASK_ASSISTANT_PRESET_ID, ['ihome-task-planning', 'ihome-task-review']],
   ]) {
     f.update(id, { instructions: '设置属于' + id })
@@ -99,7 +100,7 @@ test('each role sees its own prompt and skills, with child writes and recursive 
     assert.deepEqual((await f.provider.list(options)).map(skill => skill.name), skills)
     for (const name of skills) assert.ok((await f.provider.get({ name }, options)).content.length > 100)
     if (agent !== root) {
-      for (const name of ['ihome_propose_design_decision', 'ihome_propose_design', 'ihome_propose_record', 'ihome_propose_task', 'ihome_consult_expert']) {
+      for (const name of ['ihome_propose_quote', 'ihome_propose_design_decision', 'ihome_propose_design', 'ihome_propose_record', 'ihome_propose_task', 'ihome_consult_expert']) {
         assert.ok(f.guard({ agent, name }))
       }
     }

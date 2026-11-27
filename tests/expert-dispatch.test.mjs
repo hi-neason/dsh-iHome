@@ -40,12 +40,16 @@ test('durable provider identity selects independent expert permissions and survi
     assert.equal(allowedExpertTools(restored).has('ihome_read_design_reference'), role === 'ihome-floorplan-designer')
     assert.equal(allowedExpertTools(restored).has('ihome_review_design'), role === 'ihome-floorplan-designer')
     assert.equal(allowedExpertTools(restored).has('ihome_read_design'), role === 'ihome-floorplan-designer')
+    assert.equal(allowedExpertTools(restored).has('ihome_read_quotes'), role === 'ihome-quotes-analyst')
+    for (const tool of ['web_search', 'web_fetch']) assert.equal(allowedExpertTools(restored).has(tool), role === 'ihome-quotes-analyst')
+    assert.equal(allowedExpertTools(restored).has('ihome_read_quote_source'), role === 'ihome-quotes-analyst')
     assert.equal(allowedExpertTools(restored).has('ihome_read_tasks'), role === 'ihome-task-assistant')
-    for (const name of ['ihome_propose_design_decision', 'ihome_propose_design', 'ihome_propose_task', 'ihome_propose_record', 'ihome_propose_need', 'ihome_consult_expert', 'bash']) {
+    for (const name of ['ihome_propose_quote', 'ihome_propose_design_decision', 'ihome_propose_design', 'ihome_propose_task', 'ihome_propose_record', 'ihome_propose_need', 'ihome_consult_expert', 'bash']) {
       assert.equal(allowedExpertTools(restored).has(name), false)
     }
   }
   assert.ok(allowedExpertTools(context()).has('ihome_propose_task'))
+  assert.ok(allowedExpertTools(context()).has('ihome_propose_quote'))
 })
 
 test('unknown, nested, incomplete, and unsupported descriptors fail closed', () => {
@@ -66,8 +70,8 @@ test('unknown, nested, incomplete, and unsupported descriptors fail closed', () 
 test('dispatch creates independent scoped activations and returns results to caller with cleanup', async () => {
   const f = fixture(), root = context()
   const results = await Promise.all(Object.keys(expertProviders).map(expert => f.tool.execute({ expert, task: '整理下一步', context: '业主本周末有空' }, root)))
-  assert.equal(results.length, 3)
-  assert.equal(f.disposed(), 3)
+  assert.equal(results.length, 4)
+  assert.equal(f.disposed(), 4)
   for (const call of f.calls) {
     assert.equal(call.parent, root.agent)
     assert.equal(call.signal, root.signal)
@@ -76,7 +80,7 @@ test('dispatch creates independent scoped activations and returns results to cal
     assert.match(call.prompt[0].text, /业主本周末有空/)
     assert.equal(call.agentPreset, undefined)
   }
-  assert.deepEqual(results.map(value => value.status), ['completed', 'completed', 'completed'])
+  assert.deepEqual(results.map(value => value.status), ['completed', 'completed', 'completed', 'completed'])
 })
 
 test('dispatch rejects wrong workspace, other preset and children before starting any activation', async () => {

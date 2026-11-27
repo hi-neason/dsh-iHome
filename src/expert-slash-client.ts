@@ -39,6 +39,7 @@ export interface ExpertSlashContext {
 const experts = [
   { name: '需求分析师', key: 'needs', aliases: ['needs', 'analyst', 'requirements', 'xuqiu'] },
   { name: '户型设计师', key: 'design', aliases: ['design', 'floorplan', 'layout', 'huxing'] },
+  { name: '选商核价分析师', key: 'quotes', aliases: ['报价', '装修公司', '比价', '合同', 'quotes', 'vendor', 'contractor', 'pricing', 'xuanshang', 'hejia'] },
   { name: '任务待办助理', key: 'tasks', aliases: ['tasks', 'todo', 'calendar', 'renwu'] },
 ] as const
 

@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { FamilyArchive } from './FamilyArchive'
 import { DocumentLibrary } from './DocumentLibrary'
+import { CompanyComparison } from './CompanyComparison'
+import { CompanyAssessmentPanel } from './CompanyAssessment'
+import { VendorResearch } from './VendorResearch'
+import { QuoteWorkbench } from './QuoteWorkbench'
 import { TaskWorkbench } from './TaskWorkbench'
 import type { TaskService } from './task-client'
 import { DesignWorkbench } from './DesignWorkbench'
@@ -11,6 +15,8 @@ import type { ArchiveService } from './archive-model'
 import homeCss from './home.css'
 
 interface WorkbenchProps {
+  sessionId?: string
+  openDocument?: (address: string) => void
   id: ModuleId | null
   archiveService: ArchiveService
   taskService: TaskService
@@ -19,7 +25,7 @@ interface WorkbenchProps {
 }
 
 /** The DSH detail pane provides its own tab header and resizing controls. */
-export function ModuleWorkbench({ id, archiveService, taskService, onAsk, onOpenModule }: WorkbenchProps) {
+export function ModuleWorkbench({ id, archiveService, taskService, onAsk, onOpenModule, sessionId, openDocument }: WorkbenchProps) {
   const [choosing, setChoosing] = useState(false)
   const module = modules.find(item => item.id === id)
   const showDirectory = !module || choosing
@@ -40,6 +46,10 @@ export function ModuleWorkbench({ id, archiveService, taskService, onAsk, onOpen
         ? <FamilyArchive service={archiveService} onAsk={onAsk} />
         : id === 'documents' ? <DocumentLibrary service={archiveService} />
         : id === 'design' ? <DesignWorkbench onAsk={onAsk} />
+        : id === 'quotes' ? <QuoteWorkbench onAsk={onAsk} sessionId={sessionId} openDocument={openDocument}
+          renderCompanyComparison={ctx => <CompanyComparison {...ctx}/>}
+          renderCompanyAudit={ctx => <CompanyAssessmentPanel {...ctx}/>}
+          renderCompanyReputation={ctx => <VendorResearch {...ctx}/>} />
         : id === 'tasks' ? <TaskWorkbench service={taskService} onAsk={onAsk} />
         : <ModuleDetail key={id} id={id} onAsk={onAsk} />}
     </div>

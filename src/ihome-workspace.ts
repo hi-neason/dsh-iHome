@@ -109,6 +109,7 @@ export function moduleSessionPrompt(state: WorkspaceState, sessionId: string | u
   if (!module) return ''
   const intro = '当前选择的 iHome 工作台为「' + module.title + '」。这表示本轮可优先关注的领域，用户当前问题及 / 点名专家优先于工作台选择。' + roleInstructions[module.id]
   if (module.id === 'tasks') return intro + '设备本地日期为 ' + new Date().toLocaleDateString('sv-SE') + '。用户可以在右侧工作台的任务列表和日历中查看或直接编辑任务。'
+  if (module.id === 'quotes') return intro + '用 ihome_read_quotes 读取当前选商记录、版本和 revision。根据业主原件或原话整理建议，使用 ihome_propose_quote 在本对话确认后保存。'
   const common = intro + '右侧 iHome 工作台与当前原生对话并排显示，用户可以直接编辑资料。只使用当前问题需要的档案，通过 ihome_read_archive 按所选房间或区域、生活话题读取；MVP 只有当前这一套房，工具的 houseId 可省略。'
   const write = '新增或修改居住需求用 ihome_propose_need，记录或修正生活事实、量房尺寸用 ihome_propose_record。修改已有记录前先读取最新内容。信息齐全就调用工具，由工具在当前对话展示具体改动、询问是否接受并完成写入。根据返回结果告诉用户是否已保存，尊重拒绝，如用户给出不同意见则继续讨论。'
   return common + write

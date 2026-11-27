@@ -152,7 +152,7 @@ test('workbench context follows the current selection and gives direct user requ
   assert.match(moduleSessionPrompt(state, 'chat'), /「户型设计师」/)
   assert.doesNotMatch(moduleSessionPrompt(state, 'chat'), /「需求分析师」/)
   assert.match(moduleSessionPrompt(state, 'tasks'), /ihome_propose_task/)
-  assert.match(moduleSessionPrompt(state, 'quotes'), /报价与合同/)
+  assert.match(moduleSessionPrompt(state, 'quotes'), /报价与合同[\s\S]*ihome_read_quotes[\s\S]*ihome_propose_quote/)
 })
 
 test('host rejects legacy restore requests before opening and omits context from child agents', async t => {
