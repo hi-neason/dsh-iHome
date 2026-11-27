@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { requestIHome } from './ihome-http'
-import { parseQuoteBoard, parseVendor, type QuoteBoard, type QuoteCollection, type QuoteVendor } from './quote-model'
+import { useState, type FormEvent } from 'react'
+import { useQuoteBoard } from './useQuoteBoard'
+import { parseVendor, type QuoteBoard, type QuoteVendor } from './quote-model'
 import { QuoteScope } from './QuoteScope'
 import { QuoteDecisionPanel } from './QuoteDecision'
 import { QuoteReviewPanel } from './QuoteReview'
@@ -42,35 +42,12 @@ function Vendors({ board, onSave }: { board: QuoteBoard, onSave: (vendor: QuoteV
 
 const sections = { vendors: '候选团队', scope: '询价底稿', quotes: '报价版本', compare: '同口径比价', audit: '核价', reviews: '合同与澄清', decisions: '选商决定' }
 export function QuoteWorkbench({ onAsk }: { onAsk: (prompt: string) => void }) {
-  const [board, setBoard] = useState<QuoteBoard>()
+  const { board, error, notice, setNotice, save, reload, containerRef } = useQuoteBoard()
   const [tab, setTab] = useState<keyof typeof sections>('vendors')
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
-  const [reload, setReload] = useState(0)
-  useEffect(() => {
-    const abort = new AbortController()
-    requestIHome('quotes', { signal: abort.signal }).then(r => r.json()).then(parseQuoteBoard).then(next => {
-      if (!abort.signal.aborted) { setBoard(next); setError('') }
-    }).catch(cause => { if (!abort.signal.aborted) setError(cause.message) })
-    return () => abort.abort()
-  }, [reload])
-  async function save(collection: QuoteCollection, record: unknown) {
-    if (!board) throw new Error('选商档案尚未载入。')
-    setError(''); setNotice('')
-    try {
-      const response = await requestIHome('quotes', { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ expectedRevision: board.revision, collection, record }) })
-      setBoard(parseQuoteBoard(await response.json()))
-      setNotice('已保存到本机。')
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '保存失败。')
-      throw cause
-    }
-  }
-  return <div className="ih-quotes"><style>{css}</style>
+  return <div ref={containerRef} className="ih-quotes"><style>{css}</style>
     <div className="ih-quote-actions"><button onClick={() => onAsk('/选商核价分析师 请帮我比较装修团队和报价，先核对已有依据。')}>咨询分析师 ↗</button>
       <button onClick={() => onAsk('/选商核价分析师 请审阅随这条消息附上的报价或合同，按文件、页码或工作表引用，先列出已读范围、报价分项和待确认项。')}>审阅对话附件 ↗</button>
-      <button onClick={() => { setBoard(undefined); setNotice(''); setReload(n => n + 1) }}>重新载入档案</button></div>
+      <button onClick={() => void reload()}>重新载入档案</button></div>
     {error && <p role="alert">{error}</p>}{notice && <small role="status">{notice}</small>}
     {!board ? <p>{error ? '暂时无法打开档案。' : '正在读取选商档案…'}</p> : <>
       <nav aria-label="选商核价功能">{(Object.keys(sections) as (keyof typeof sections)[]).map(key =>

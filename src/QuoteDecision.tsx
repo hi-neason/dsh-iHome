@@ -48,11 +48,11 @@ export function QuoteDecisionPanel({ board, onSave }: { board: QuoteBoard, onSav
     return quote && board.vendors.find(vendor => vendor.id === quote.vendorId)?.name + ' · ' + quote.version
   }
   return <section><h2>选商决定与报告</h2>
-    {!board.quotes.length ? <p>录入候选团队的书面报价后，可在这里记录选择。</p> : preview ? <article>
+    {!board.quotes.length ? <p>录入候选团队的书面报价后，可在这里记录选择。</p> : preview ? <article data-quote-draft>
       <h3>核对决定与报告</h3><pre className="ih-quote-report">{preview.report}</pre>
       <div className="ih-quote-actions"><button disabled={busy} onClick={() => void confirm()}>确认保存决定</button>
         <button disabled={busy} onClick={() => setPreview(undefined)}>返回修改</button></div>
-    </article> : <form onSubmit={prepare}><fieldset><legend>本次考虑的报价</legend>
+    </article> : <form onSubmit={prepare} data-quote-pristine={!chosen && !reason && !Object.keys(versions).length || undefined}><fieldset><legend>本次考虑的报价</legend>
       {board.vendors.map(vendor => {
         const options = quoteVersions(board, vendor.id)
         if (!options.length) return null

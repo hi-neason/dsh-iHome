@@ -36,7 +36,12 @@ export async function mountQuotes(ctx: QuoteHostContext): Promise<void> {
         async fetch(request) {
           try {
             request.signal.throwIfAborted()
-            if (request.method === 'GET') return json(read())
+            if (request.method === 'GET') {
+              const board = read()
+              if (new URL(request.url).searchParams.get('revision') === String(board.revision))
+                return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } })
+              return json(board)
+            }
             if (request.method !== 'POST') return json({ error: '请求方法无效。' }, 405)
             return json(await save(await request.json(), request.signal))
           } catch (error) {
