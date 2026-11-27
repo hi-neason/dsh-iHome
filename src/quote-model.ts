@@ -1,3 +1,5 @@
+import { parseQuoteReference, type QuoteReference } from './quote-reference.ts'
+export type { QuoteReference } from './quote-reference.ts'
 import { parseQuoteVersion, type QuoteVersion } from './quote-version.ts'
 export type { QuoteVersion, QuoteLine } from './quote-version.ts'
 
@@ -16,6 +18,7 @@ export interface QuoteBoard {
   revision: number
   vendors: QuoteVendor[]
   quotes: QuoteVersion[]
+  references: QuoteReference[]
 }
 
 export function quoteObject(value: unknown): Record<string, unknown> {
@@ -60,10 +63,10 @@ export function parseQuoteBoard(value: unknown): QuoteBoard {
     if (versions.has(key)) throw new Error('同一团队的报价版本名称须唯一。')
     versions.add(key)
   }
-  return { revision: row.revision, vendors, quotes }
+  return { revision: row.revision, vendors, quotes, references: records(row.references === undefined ? [] : row.references, parseQuoteReference) }
 }
 
-export const quoteCollections = ['vendors', 'quotes'] as const
+export const quoteCollections = ['vendors', 'quotes', 'references'] as const
 export type QuoteCollection = typeof quoteCollections[number]
 export class QuoteConflict extends Error {}
 
