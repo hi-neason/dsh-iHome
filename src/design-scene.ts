@@ -234,7 +234,8 @@ export function mountDesignScene(canvas: HTMLCanvasElement, onSelect: (id: strin
     for (const hit of hits) {
       let object: THREE.Object3D | null = hit.object
       while (object && object !== group) {
-        if (typeof object.userData.elementId === 'string') { selected = object.userData.elementId; break }
+        if (typeof object.userData.designAssetId === 'string') { selected = object.userData.designAssetId; break }
+        if (!selected && typeof object.userData.elementId === 'string') selected = object.userData.elementId
         object = object.parent
       }
       if (selected) break

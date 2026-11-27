@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { DesignVersions } from './DesignVersions'
+import { DesignAssets } from './DesignAssets'
+import { loadDesignAssets } from './design-glb'
 import { DesignSpace } from './DesignSpace'
 import { ReferencedPlan, DesignReferenceEditor } from './DesignReference'
 import type { ArchiveService } from './archive-model'
@@ -137,13 +139,14 @@ export function DesignWorkbench({ onAsk, archive }: { archive: ArchiveService, o
       {view === 'space' && <label><input type="checkbox" checked={allFloors} onChange={e => setAllFloors(e.target.checked)} /> 显示整栋</label>}
     </div>
     {view === 'space' ? <DesignSpace key={scheme.id} model={model} floorId={floor.id}
-      allFloors={allFloors} selectedId={selectedId} onSelect={id => {
+      loadAssets={loadDesignAssets} allFloors={allFloors} selectedId={selectedId} onSelect={id => {
         setSelectedId(id)
         const level = model.floors.find(value => [...value.walls, ...value.openings, ...value.items, ...(value.assets ?? [])].some(element => element.id === id))
         if (level) setFloorId(level.id)
       }} /> : <ReferencedPlan key={version?.id ?? scheme.id} model={model} floorId={floor.id} selectedId={selectedId} onSelect={setSelectedId} onChange={replace} readonly={!!version} />}
     <DesignReferenceEditor key={scheme.id + ':' + floor.id + ':' + (version?.id ?? state.revision)} floor={floor} archive={archive}
       disabled={busy || !!version} save={reference => replace({ ...model, floors: model.floors.map(level => level.id === floor.id ? { ...level, reference } : level) })} />
+    <DesignAssets key={scheme.id + floor.id} model={model} floorId={floor.id} readonly={busy || !!version} onChange={replace} />
     {editor?.revision === state.revision && <FloorEditor error={error} floor={editor.kind === 'edit' ? floor : undefined}
       elevation={Math.max(...model.floors.map(level => level.elevation + level.height))}
       busy={busy} close={() => setEditor(null)} save={async next => {
