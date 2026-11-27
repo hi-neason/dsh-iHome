@@ -101,7 +101,7 @@ function ReferenceDialog({ archive, original, save, close }: {
       const size = calibratedSize(img.current.naturalWidth, img.current.naturalHeight, points[0], points[1], metres)
       const assetId = source.id ?? await storeDesignAsset(source.blob, source.name)
       if (await save({ assetId, name: source.name, x: Number(x), z: Number(z), ...size })) close()
-      else setError('底图未保存，请核对当前草稿后重试。')
+      else setError('底图未保存，请核对当前方案后重试。')
     } catch (err) { setError(err instanceof Error ? err.message : '底图保存失败。') }
     finally { setBusy(false) }
   }

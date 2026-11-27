@@ -88,3 +88,11 @@ test('both expert entrances share the chat and select their own workbench', asyn
   assert.equal(navigation.getSnapshot().selectedModules.team, 'archive')
   assert.deepEqual(calls.filter(call => call[0] === 'session'), [['session', 'team'], ['session', 'team']])
 })
+
+test('reopening the design tab in the same session returns to its scheme directory', async t => {
+  const { navigation } = fixture(t, normal)
+  await navigation.openModule('design')
+  const first = navigation.getSnapshot().designEntries['design-session']
+  await navigation.openModule('design')
+  assert.ok(navigation.getSnapshot().designEntries['design-session'] > first)
+})

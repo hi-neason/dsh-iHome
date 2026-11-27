@@ -69,10 +69,10 @@ export function reviewDesign(state: DesignState, archive: Archive, raw: unknown)
   const comparison = args.compareDesignId !== undefined || args.compareVersionId !== undefined ? select(state, args.compareDesignId ?? selected.design.id, args.compareVersionId) : undefined
   const baseline = comparison ? metrics(comparison.model) : undefined
   const report = {
-    revision: state.revision, archiveRevision: archive.revision, designId: selected.design.id, versionId: selected.version?.id,
+    revision: state.revision, archiveRevision: archive.revision, designId: selected.design.id, designName: selected.design.name,
     metrics: current, metricsNote: '面积为模型矩形房间占地之和，未扣除重叠及墙体，不是建筑面积；模型数量及长度不证明功能满足或施工合规。',
     needs, measurements: archive.measurements, issues,
-    comparison: comparison && baseline ? { designId: comparison.design.id, versionId: comparison.version?.id, baseline,
+    comparison: comparison && baseline ? { designId: comparison.design.id, designName: comparison.design.name, baseline,
       delta: { floors: current.floors - baseline.floors, roomArea: current.roomArea - baseline.roomArea, wallLength: current.wallLength - baseline.wallLength, furniture: current.furniture - baseline.furniture },
       objects: compareDesignModels(comparison.model, selected.model) } : undefined,
     limits: ['未自动验证承重、采光、消防、楼梯净高及通道净宽。', '几何问题为待核验线索，不能直接视为违规。', '请用需求编号、模型对象编号与尺寸来源逐项说明满足、冲突或未知，并给出可测量的下一步。'],
@@ -85,12 +85,14 @@ export async function prepareDesignDecision(state: DesignState, archive: Archive
   const args = object(raw)
   if (Object.keys(args).some(key => !['expectedRevision', 'expectedDesignRevision', 'designId', 'versionId', 'text', 'reason', 'needIds', 'objectIds', 'attachmentIds', 'supersedesId'].includes(key))) throw new Error('未知决定参数。')
   if (args.expectedRevision !== archive.revision || args.expectedDesignRevision !== state.revision) throw new Error('档案或设计已有更新，请重新读取后提议。')
-  const versionId = text(args.versionId, '版本编号')
+  const versionId = args.versionId === undefined ? undefined : text(args.versionId, '历史版本编号')
   const selected = select(state, text(args.designId, '方案编号'), versionId)
   const objectIds = ids(args.objectIds ?? [])
   const modelIds = new Set(selected.model.floors.flatMap(floor => [floor.id, ...floor.walls.map(item => item.id), ...floor.openings.map(item => item.id), ...floor.items.map(item => item.id), ...(floor.assets ?? []).map(item => item.id)]))
   if (objectIds.some(id => !modelIds.has(id))) throw new Error('决定关联的模型对象不存在。')
-  const source = { designId: selected.design.id, versionId, designName: selected.design.name, versionName: selected.version!.name,
+  const source = { designId: selected.design.id, designName: selected.design.name, capturedAt: new Date().toISOString(),
+    ...(selected.version ? { versionId: selected.version.id, versionName: selected.version.name } : {}),
+    geometrySummary: metrics(selected.model),
     objectIds, modelSha256: Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(selected.model))))).map(byte => byte.toString(16).padStart(2, '0')).join('') }
   const needIds = ids(args.needIds ?? [])
   const decision: Decision = { id: crypto.randomUUID(), houseId: archive.houses[0].id,
@@ -106,12 +108,12 @@ export function createDesignReviewTools(access: {
   saveArchive(next: Archive, signal: AbortSignal): Promise<Archive>, questions: ArchiveHostContext['userQuestions'],
 }): ArchiveTool[] {
   const output: ArchiveTool['output'] = { schema: {}, render(_args, value) { return [{ type: 'text', text: JSON.stringify(value) }] } }
-  return [{ name: 'ihome_review_design', description: '结合真实家庭需求与户型模型检查关联、家具占地重叠、楼梯与目标楼层的连接，并按保存版本量化比较面积、墙长及物件变化。输出含需求/房间/对象编号和实测来源，供设计师解释，不自动断定需求满足或施工合规。',
-    parameters: { type: 'object', additionalProperties: false, properties: { designId: { type: 'string' }, versionId: { type: 'string' }, compareDesignId: { type: 'string' }, compareVersionId: { type: 'string' } } }, output,
+  return [{ name: 'ihome_review_design', description: '结合真实家庭需求与户型模型检查关联、家具占地重叠、楼梯与目标楼层的连接，并按命名方案量化比较面积、墙长及物件变化。输出含需求/房间/对象编号和实测来源，供设计师解释，不自动断定需求满足或施工合规。',
+    parameters: { type: 'object', additionalProperties: false, properties: { designId: { type: 'string' }, compareDesignId: { type: 'string' } } }, output,
     async execute(args) { return reviewDesign(access.readDesign(), access.readArchive(), args) },
-  }, { name: 'ihome_propose_design_decision', description: '主会话确认后保存正式装修决定，关联居住需求和不可变的设计保存版本。先 snapshot 保存方案版本，再读取设计与档案 revision；只记录用户采纳的具体做法及理由，不会自动创建待办。替代已有决定用 supersedesId 保留历史。',
-    parameters: { type: 'object', additionalProperties: false, required: ['expectedRevision', 'expectedDesignRevision', 'designId', 'versionId', 'text', 'reason'], properties: {
-      expectedRevision: { type: 'integer', minimum: 0 }, expectedDesignRevision: { type: 'integer', minimum: 0 }, designId: { type: 'string' }, versionId: { type: 'string' }, text: { type: 'string' }, reason: { type: 'string' }, supersedesId: { type: 'string' },
+  }, { name: 'ihome_propose_design_decision', description: '主会话确认后保存正式装修决定，关联居住需求和当前命名方案，自动保存采纳时的几何摘要、时间与指纹。先读取设计与档案 revision；只记录用户采纳的具体做法及理由，不会自动创建待办。替代已有决定用 supersedesId 保留历史。',
+    parameters: { type: 'object', additionalProperties: false, required: ['expectedRevision', 'expectedDesignRevision', 'designId', 'text', 'reason'], properties: {
+      expectedRevision: { type: 'integer', minimum: 0 }, expectedDesignRevision: { type: 'integer', minimum: 0 }, designId: { type: 'string' }, text: { type: 'string' }, reason: { type: 'string' }, supersedesId: { type: 'string' },
       needIds: { type: 'array', items: { type: 'string' } }, objectIds: { type: 'array', items: { type: 'string' } }, attachmentIds: { type: 'array', items: { type: 'string' } },
     } }, output,
     async execute(args, execution) {
@@ -126,7 +128,7 @@ export function createDesignReviewTools(access: {
       // Revalidate both sources after waiting. Archive save also checks revision inside its atomic update.
       await prepareDesignDecision(access.readDesign(), access.readArchive(), args)
       const saved = await access.saveArchive(change.next, execution.signal)
-      return { status: 'applied', revision: saved.revision, decisionId: change.decision.id, designId: object(args).designId, versionId: object(args).versionId }
+      return { status: 'applied', revision: saved.revision, decisionId: change.decision.id, designId: object(args).designId }
     },
   }]
 }

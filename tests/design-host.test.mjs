@@ -5,8 +5,8 @@ import { build } from 'esbuild'
 const bundle = await build({ entryPoints: ['src/design-host.ts'], bundle: true, platform: 'node', format: 'esm', write: false })
 const { mountDesigns } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`)
 
-async function fixture(beforeUpdate) {
-  let state, route, service, cleanup, closed = false
+async function fixture(beforeUpdate, initial) {
+  let state = initial, route, service, cleanup, closed = false
   const ctx = {
     storageDomain: { async open(spec) {
       assert.equal(spec.name, 'ihome_designs')
@@ -66,4 +66,22 @@ test('HTTP and service refuse closed or aborted operations and dispose the stora
   assert.equal(f.closed(), true)
   assert.throws(() => f.service.read(), /已关闭/)
   await assert.rejects(f.service.change({ action: 'create', expectedRevision: 0 }), /已关闭/)
+})
+
+test('startup migration persists once and preserves old snapshot identities after restart', async () => {
+  const first=await fixture(), initial=first.service.read()
+  initial.designs[0].versions=[{id:'legacy',name:'旧方案',model:structuredClone(initial.designs[0].model),createdAt:'2026-11-27T00:00:00.000Z'}]
+  const migrated=await fixture(undefined,initial)
+  assert.equal(migrated.state().revision,1)
+  assert.equal(migrated.state().designs.length,2)
+  assert.equal(migrated.state().designs[0].versions[0].id,'legacy')
+  const restart=await fixture(()=>assert.fail('idempotent migration must not write'),migrated.state())
+  assert.deepEqual(restart.state(),migrated.state())
+})
+test('rename endpoint applies exactly one concurrent CAS update without replacing geometry', async () => {
+  const f=await fixture(), initial=f.service.read()
+  const responses=await Promise.all(['方案甲','方案乙'].map(name=>f.http({action:'rename',designId:initial.activeId,expectedRevision:0,name})))
+  assert.deepEqual(responses.map(r=>r.status).sort(),[200,409])
+  assert.deepEqual(f.state().designs[0].model,initial.designs[0].model)
+  assert.equal(f.state().designs[0].versions.length,0)
 })

@@ -27,9 +27,11 @@ async function hash(bytes: Uint8Array<ArrayBuffer>) {
 }
 
 export async function exportDesignProject(design: DesignScheme, load: (id: string) => Promise<Blob>): Promise<Blob> {
+  const parsed = validateDesignScheme(design)
+  const exported = { id: parsed.id, name: parsed.name, model: parsed.model }
   const assets: Record<string, string> = {}
   let length = 0
-  for (const id of assetsIn(design)) {
+  for (const id of assetsIn({ ...exported, versions: [] })) {
     const file = await load(id)
     length += 4 * Math.ceil(file.size / 3)
     if (length > projectFileLimit) throw new Error('工程超过可交换文件大小（128 MiB）。')
@@ -37,7 +39,7 @@ export async function exportDesignProject(design: DesignScheme, load: (id: strin
     if (await hash(bytes) !== id) throw new Error('本机素材内容与工程记录不一致。')
     assets[id] = encode(bytes)
   }
-  const file = new Blob([JSON.stringify({ type: fileType, formatVersion: 1, design, assets })], { type: 'application/json' })
+  const file = new Blob([JSON.stringify({ type: fileType, formatVersion: 2, design: exported, assets })], { type: 'application/json' })
   if (file.size > projectFileLimit) throw new Error('工程超过可交换文件大小（128 MiB）。')
   return file
 }
@@ -45,8 +47,9 @@ export async function exportDesignProject(design: DesignScheme, load: (id: strin
 export async function importDesignProject(file: Blob, store: (data: Blob, name: string) => Promise<string>): Promise<DesignScheme> {
   if (file.size > projectFileLimit) throw new Error('工程文件超过 128 MiB。')
   const data = JSON.parse(await file.text())
-  if (data?.type !== fileType || data.formatVersion !== 1) throw new Error('无法识别这个 iHome 户型工程版本。')
-  const design = validateDesignScheme(data.design)
+  if (data?.type !== fileType || ![1, 2].includes(data.formatVersion)) throw new Error('无法识别这个 iHome 户型工程版本。')
+  if (data.formatVersion === 2 && (!data.design || typeof data.design !== 'object' || Array.isArray(data.design) || Object.keys(data.design).some(key => !['id', 'name', 'model'].includes(key)))) throw new Error('单方案工程格式无效。')
+  const design = validateDesignScheme(data.formatVersion === 2 ? { ...data.design, versions: [] } : data.design)
   const refs = assetsIn(design)
   if (!data.assets || typeof data.assets !== 'object' || Array.isArray(data.assets) || Object.keys(data.assets).length !== refs.length) {
     throw new Error('工程素材目录不完整。')

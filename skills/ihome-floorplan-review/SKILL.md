@@ -1,11 +1,11 @@
 ---
 name: ihome-floorplan-review
-description: 对照真实家庭需求和模型评审布局、比较保存版本、生成备选方案及可追溯装修决定。
+description: 对照真实家庭需求和模型评审布局、比较命名方案、生成备选方案及可追溯装修决定。
 ---
 
 # 户型评审与采纳
 
-先 ihome_read_design 读取方案，再 ihome_review_design 读取真实需求、关联家人、模型房间覆盖、采信尺寸及几何线索。需要比较时明确基准 compareDesignId/compareVersionId，所选 designId/versionId 为新方案。没有基准时不可编造改善幅度。
+先 ihome_read_design 读取方案，再 ihome_review_design 读取真实需求、关联家人、模型房间覆盖、采信尺寸及几何线索。需要比较时明确基准 compareDesignId，所选 designId 为新方案。没有基准时不可编造改善幅度。
 
 逐条列出需求编号、家人、房间、模型对象编号，评估“满足 / 部分满足 / 冲突 / 未知”。模型存在同名房间或 roomId 关联不等于满足生活需求。引用实际模型坐标、尺度和档案尺寸来源；必须区分实测、图纸、估算、设计提议。测量记录里的 adopted 才表示已采信，冲突尺寸需说明取舍。
 
@@ -13,6 +13,6 @@ description: 对照真实家庭需求和模型评审布局、比较保存版本�
 
 比较方案时引用工具的 added/removed/changed 对象与面积、墙长、家具数量差值，再解释这些变化怎样影响相关需求。矩形房间面积之和不是建筑面积，重叠空间不应当作面积收益。数量减少不直接等于成本降低。提供至少一个有明确取舍的备选布局：改善哪些需求、牺牲什么、需要补什么资料。没有足够依据时提供澄清或补量方案而非编造第二套模型。
 
-需要落实备选时，由主 Agent 用 copy 新建方案，再通过局部 operations 修改，原方案与保存版本保留。子专家只读并返回可执行建议。正式采纳具体做法时，先建议 snapshot 保存命名版本，再把 designId、versionId、needIds、objectIds、采纳理由和需要替代的 supersedesId 交给主 Agent，由 ihome_propose_design_decision 在对话确认后写入正式装修决定。未收到 applied 与 decisionId 不能说已采纳或已记录。
+需要落实备选时，由主 Agent 用 copy 新建方案，再通过局部 operations 修改，原方案保留。子专家只读并返回可执行建议。正式采纳具体做法时，直接把 designId、needIds、objectIds、采纳理由和需要替代的 supersedesId 交给主 Agent，由 ihome_propose_design_decision 在对话确认后写入正式装修决定，工具自动记录采纳时间、几何摘要和指纹，后续修改方案不覆盖原决定的来源。未收到 applied 与 decisionId 不能说已采纳或已记录。
 
 待补量事项交任务待办助理，每项包含位置、相关楼层/对象 ID、要测的量及单位、为什么影响当前设计、完成判断依据。截止日期来自业主，未知则未排期。用现有 ihome_read_tasks 查重，再由主会话 ihome_propose_task 提议创建；不要把评审报告当成已保存的任务。

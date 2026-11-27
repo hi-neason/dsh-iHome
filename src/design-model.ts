@@ -72,10 +72,10 @@ export interface DesignFloor {
 
 export interface DesignModel { floors: DesignFloor[] }
 export interface DesignVersion { id: string, name: string, model: DesignModel, createdAt: string }
-export interface DesignScheme { id: string, name: string, model: DesignModel, versions: DesignVersion[] }
+export interface DesignScheme { id: string, name: string, model: DesignModel, versions: DesignVersion[], legacyVersion?: { designId: string, versionId: string } }
 export interface DesignState { revision: number, activeId: string, designs: DesignScheme[] }
 export interface DesignCommand {
-  action: 'replace' | 'create' | 'copy' | 'snapshot' | 'activate' | 'import'
+  action: 'replace' | 'create' | 'copy' | 'rename' | 'activate' | 'import'
   expectedRevision: number
   designId?: string
   versionId?: string
@@ -213,22 +213,59 @@ function version(raw: unknown): DesignVersion {
   return { id: text(value.id, '版本编号'), name: text(value.name, '版本名称'), model: validateDesignModel(value.model), createdAt }
 }
 export function validateDesignScheme(raw: unknown): DesignScheme {
-  const value = record(raw, '设计方案', ['id', 'name', 'model', 'versions'])
+  const value = record(raw, '设计方案', ['id', 'name', 'model', 'versions', 'legacyVersion'])
   const versions = list(value.versions, '历史版本', version, 1000)
   unique(versions, '历史版本')
-  return { id: text(value.id, '方案编号'), name: text(value.name, '方案名称'), model: validateDesignModel(value.model), versions }
+  const legacy = value.legacyVersion === undefined ? undefined : record(value.legacyVersion, '旧版来源', ['designId', 'versionId'])
+  return { id: text(value.id, '方案编号'), name: text(value.name, '方案名称'), model: validateDesignModel(value.model), versions,
+    ...(legacy ? { legacyVersion: { designId: text(legacy.designId, '原方案编号'), versionId: text(legacy.versionId, '原版本编号') } } : {}) }
+
 }
 export function validateDesignState(raw: unknown): DesignState {
   const value = record(raw, '设计档案', ['revision', 'activeId', 'designs'])
-  const designs = list(value.designs, '设计方案', validateDesignScheme, 1000)
+  const designs = list(value.designs, '设计方案', validateDesignScheme, Number.MAX_SAFE_INTEGER)
   unique(designs, '设计方案')
   const activeId = text(value.activeId, '当前方案')
   if (!designs.some(item => item.id === activeId)) throw new Error('当前方案不存在。')
   return { revision: revision(value.revision), activeId, designs }
 }
+/** Read-only startup probe; no model cloning, IDs or allocations per snapshot. */
+export function hasUnmigratedDesignVersions(state: DesignState): boolean {
+  const migrated = new Map<string, Set<string>>()
+  for (const design of state.designs) if (design.legacyVersion) {
+    const { designId, versionId } = design.legacyVersion
+    let versions = migrated.get(designId)
+    if (!versions) migrated.set(designId, versions = new Set())
+    versions.add(versionId)
+  }
+  return state.designs.some(design => design.versions.some(version => !migrated.get(design.id)?.has(version.id)))
+}
+
+/** Materialize old snapshots as ordinary independent schemes without destroying
+ * their original IDs/models: existing decision references still resolve there.
+ * Identity is the source pair, never an array index or a display name. */
+export function migrateDesignVersions(raw: DesignState): DesignState {
+  const state = validateDesignState(raw)
+  const migrated = new Set(state.designs.flatMap(design => design.legacyVersion
+    ? [JSON.stringify([design.legacyVersion.designId, design.legacyVersion.versionId])] : []))
+  const ids = new Set(state.designs.map(design => design.id))
+  const additions: DesignScheme[] = []
+  for (const design of state.designs) for (const version of design.versions) {
+    const key = JSON.stringify([design.id, version.id])
+    if (migrated.has(key)) continue
+    let id = crypto.randomUUID()
+    while (ids.has(id)) id = crypto.randomUUID()
+    ids.add(id); migrated.add(key)
+    additions.push({ id, name: `${design.name} · ${version.name}`.slice(0, 160),
+      model: structuredClone(version.model), versions: [], legacyVersion: { designId: design.id, versionId: version.id } })
+  }
+  for (const addition of additions) state.designs.push(addition)
+  return state
+}
+
 export function parseDesignCommand(raw: unknown): DesignCommand {
   const value = record(raw, '设计操作', ['action', 'expectedRevision', 'designId', 'versionId', 'name', 'model', 'design'])
-  if (!['replace', 'create', 'copy', 'snapshot', 'activate', 'import'].includes(value.action as string)) throw new Error('设计操作无效。')
+  if (!['replace', 'create', 'copy', 'rename', 'activate', 'import'].includes(value.action as string)) throw new Error('设计操作无效。')
   const action = value.action as DesignCommand['action']
   const designId = value.designId === undefined ? undefined : text(value.designId, '方案编号')
   const versionId = value.versionId === undefined ? undefined : text(value.versionId, '版本编号')
@@ -236,6 +273,7 @@ export function parseDesignCommand(raw: unknown): DesignCommand {
   if ((action === 'create' || action === 'import') && designId !== undefined) throw new Error('新建方案由系统分配编号。')
   if (versionId !== undefined && action !== 'copy' && action !== 'activate') throw new Error('此操作不支持指定历史版本。')
   if (value.model !== undefined && action !== 'replace' && action !== 'create') throw new Error('此操作不接受新的户型模型。')
+  if (action === 'rename' && value.name === undefined) throw new Error('请提供新的方案名称。')
   if (action === 'replace' && value.model === undefined) throw new Error('请提供完整的户型模型。')
   if (action === 'import' && value.design === undefined) throw new Error('请提供要导入的设计方案。')
   if (action !== 'import' && value.design !== undefined) throw new Error('此操作不接受工程导入数据。')
@@ -252,7 +290,8 @@ export function parseDesignCommand(raw: unknown): DesignCommand {
 export function applyDesignCommand(current: DesignState, raw: unknown): DesignState {
   const command = parseDesignCommand(raw)
   if (command.expectedRevision !== current.revision) throw new DesignConflict('设计已被其他操作更新，请重新载入后再修改。')
-  const next = validateDesignState(current)
+  const next = command.versionId !== undefined && hasUnmigratedDesignVersions(current)
+    ? migrateDesignVersions(current) : validateDesignState(current)
   const source = next.designs.find(item => item.id === command.designId)
   if (command.action !== 'create' && command.action !== 'import' && !source) throw new Error('指定的设计方案不存在。')
   const savedVersion = command.versionId === undefined ? undefined : source?.versions.find(item => item.id === command.versionId)
@@ -260,7 +299,7 @@ export function applyDesignCommand(current: DesignState, raw: unknown): DesignSt
   switch (command.action) {
     case 'import': {
       const id = crypto.randomUUID()
-      next.designs.push({ ...command.design!, id, name: command.name ?? command.design!.name })
+      next.designs.push({ id, name: command.name ?? command.design!.name, model: command.design!.model, versions: command.design!.versions })
       next.activeId = id
       break
     }
@@ -272,7 +311,7 @@ export function applyDesignCommand(current: DesignState, raw: unknown): DesignSt
     }
     case 'copy': {
       const id = crypto.randomUUID()
-      next.designs.push({ id, name: command.name ?? `${source!.name} 副本`, model: structuredClone(savedVersion?.model ?? source!.model), versions: [] })
+      next.designs.push({ id, name: command.name ?? `${source!.name} 副本`.slice(0, 160), model: structuredClone(savedVersion?.model ?? source!.model), versions: [] })
       next.activeId = id
       break
     }
@@ -280,14 +319,15 @@ export function applyDesignCommand(current: DesignState, raw: unknown): DesignSt
       source!.model = command.model!
       if (command.name !== undefined) source!.name = command.name
       break
-    case 'snapshot':
-      source!.versions.push({ id: crypto.randomUUID(), name: command.name ?? `版本 ${source!.versions.length + 1}`, model: structuredClone(source!.model), createdAt: new Date().toISOString() })
+    case 'rename':
+      source!.name = command.name!
       break
     case 'activate':
       next.activeId = source!.id
-      if (savedVersion) source!.model = structuredClone(savedVersion.model)
+      if (savedVersion) next.activeId = next.designs.find(design => design.legacyVersion?.designId === source!.id && design.legacyVersion.versionId === savedVersion.id)!.id
       break
   }
   next.revision++
-  return validateDesignState(next)
+  return command.action === 'import' && command.design!.versions.length
+    ? migrateDesignVersions(next) : validateDesignState(next)
 }

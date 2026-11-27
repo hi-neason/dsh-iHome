@@ -1,5 +1,5 @@
 import type { ArchiveHostContext } from './archive-host'
-import { applyDesignCommand, createDesignState, DesignConflict, parseDesignCommand, validateDesignState, type DesignState, type DesignCommand } from './design-model.ts'
+import { applyDesignCommand, createDesignState, DesignConflict, parseDesignCommand, hasUnmigratedDesignVersions, migrateDesignVersions, validateDesignState, type DesignState, type DesignCommand } from './design-model.ts'
 
 interface DesignTable {
   get(id: string): DesignState | undefined
@@ -32,6 +32,16 @@ export async function mountDesigns(ctx: DesignHostContext): Promise<void> {
     try {
       const table = domain.table('projects')
       if (!table.get('home')) await table.put('home', createDesignState())
+      else {
+        const prior = table.get('home')!
+        if (hasUnmigratedDesignVersions(prior)) {
+          await table.update('home', current => {
+            const migrated = migrateDesignVersions(current)
+            if (migrated.designs.length !== current.designs.length) migrated.revision++
+            return migrated
+          })
+        }
+      }
       function assertActive(): void {
         if (!active) throw new Error('户型设计服务已关闭。')
       }

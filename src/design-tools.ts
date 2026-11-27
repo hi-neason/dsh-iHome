@@ -15,15 +15,15 @@ const fields: Record<string, string[]> = {
 }
 export function prepareDesignProposal(state: DesignState, raw: unknown): { command: DesignCommand, summary: string } {
   const input = object(raw)
-  if (Object.keys(input).some(key => !['action', 'expectedRevision', 'designId', 'versionId', 'name', 'model', 'operations'].includes(key))) throw new Error('未知设计参数。')
+  if (Object.keys(input).some(key => !['action', 'expectedRevision', 'designId', 'name', 'model', 'operations'].includes(key))) throw new Error('未知设计参数。')
   if (input.expectedRevision !== state.revision) throw new DesignConflict('设计已有更新，请重新读取后修改。')
-  if (!['create', 'edit', 'copy', 'snapshot', 'activate'].includes(String(input.action))) throw new Error('不支持此设计操作。')
+  if (!['create', 'edit', 'copy', 'rename', 'activate'].includes(String(input.action))) throw new Error('不支持此设计操作。')
   const source = state.designs.find(design => design.id === (input.designId ?? state.activeId))
   const { operations, ...base } = input
   let command: DesignCommand
   const changes: string[] = []
   if (input.action === 'edit') {
-    if (!source || input.model !== undefined || input.versionId !== undefined) throw new Error('局部编辑需要有效方案，不接受完整模型或历史版本。')
+    if (!source || input.model !== undefined || input.versionId !== undefined) throw new Error('局部编辑需要有效方案，不接受完整模型。')
     if (!Array.isArray(operations) || !operations.length || operations.length > 100) throw new Error('请提交 1 至 100 项局部操作。')
     const model = structuredClone(source.model)
     for (const rawOperation of operations) {
@@ -70,8 +70,8 @@ export async function mountDesignTools(ctx: DesignToolsContext): Promise<void> {
       if (!allowedExpertTools(execution).has(tool.name)) throw new Error('当前上下文不能使用此设计工具。')
       return tool.execute(args, execution)
     } }, { when: context => allowedExpertTools(context).has(tool.name) })
-    const disposers = [register({ name: 'ihome_read_design', description: '读取本机户型设计目录、当前 revision 和所选模型。默认当前方案；可指定 designId、versionId。坐标和尺寸单位米，x/z 为物体中心，旋转单位度。',
-      parameters: { type: 'object', additionalProperties: false, properties: { designId: { type: 'string' }, versionId: { type: 'string' } } }, output,
+    const disposers = [register({ name: 'ihome_read_design', description: '读取本机户型设计目录、当前 revision 和所选模型。默认当前方案；可指定 designId。坐标和尺寸单位米，x/z 为物体中心，旋转单位度。',
+      parameters: { type: 'object', additionalProperties: false, properties: { designId: { type: 'string' } } }, output,
       async execute(raw) {
         const args = object(raw), state = ctx.ihomeDesigns.read()
         if (Object.keys(args).some(key => !['designId', 'versionId'].includes(key))) throw new Error('未知读取参数。')
@@ -80,11 +80,11 @@ export async function mountDesignTools(ctx: DesignToolsContext): Promise<void> {
         const version = args.versionId === undefined ? undefined : selected.versions.find(item => item.id === args.versionId)
         if (args.versionId !== undefined && !version) throw new Error('版本不存在。')
         // Native DSH tool outputs must be lossless JSON, including optional nested geometry fields.
-        return JSON.parse(JSON.stringify({ revision: state.revision, activeId: state.activeId, designs: state.designs.map(item => ({ id: item.id, name: item.name, versions: item.versions.map(({ model: _model, ...metadata }) => metadata) })), designId: selected.id, name: selected.name, versionId: version?.id, model: version?.model ?? selected.model }))
+        return JSON.parse(JSON.stringify({ revision: state.revision, activeId: state.activeId, designs: state.designs.map(item => ({ id: item.id, name: item.name })), designId: selected.id, name: selected.name, model: version?.model ?? selected.model }))
       },
-    }), register({ name: 'ihome_propose_design', description: '主会话提出设计操作，用户在对话接受后直接写入本机。先读最新 revision。create 可带完整 model；edit 只接受局部 operations 并保留未修改对象及附件。copy 复制方案或版本；snapshot 保存版本；activate 切换方案或恢复版本。字段详见 ihome-floorplan-modeling 技能。',
+    }), register({ name: 'ihome_propose_design', description: '主会话提出设计操作，用户在对话接受后直接写入本机。先读最新 revision。create 可带完整 model；edit 只接受局部 operations 并保留未修改对象及附件。copy 复制为独立命名方案；rename 修改方案名称；activate 切换方案。字段详见 ihome-floorplan-modeling 技能。',
       parameters: { type: 'object', additionalProperties: false, required: ['action', 'expectedRevision'], properties: {
-        action: { type: 'string', enum: ['create', 'edit', 'copy', 'snapshot', 'activate'] }, expectedRevision: { type: 'integer', minimum: 0 }, designId: { type: 'string' }, versionId: { type: 'string' }, name: { type: 'string' }, model: { type: 'object' }, operations: { type: 'array', minItems: 1, maxItems: 100, items: { type: 'object', additionalProperties: false, required: ['entity', 'action', 'id'], properties: { entity: { type: 'string', enum: ['floor', 'wall', 'opening', 'item'] }, action: { type: 'string', enum: ['upsert', 'remove'] }, id: { type: 'string' }, floorId: { type: 'string' }, value: { type: 'object' } } } },
+        action: { type: 'string', enum: ['create', 'edit', 'copy', 'rename', 'activate'] }, expectedRevision: { type: 'integer', minimum: 0 }, designId: { type: 'string' }, name: { type: 'string' }, model: { type: 'object' }, operations: { type: 'array', minItems: 1, maxItems: 100, items: { type: 'object', additionalProperties: false, required: ['entity', 'action', 'id'], properties: { entity: { type: 'string', enum: ['floor', 'wall', 'opening', 'item'] }, action: { type: 'string', enum: ['upsert', 'remove'] }, id: { type: 'string' }, floorId: { type: 'string' }, value: { type: 'object' } } } },
       } }, output,
       async execute(args, execution) {
         if (!execution.agent) throw new Error('请在主会话修改设计。')

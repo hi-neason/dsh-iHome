@@ -68,6 +68,7 @@ export function apply(ctx: ClientContext): void {
     const expert = matching.find(module => module.id === snapshot.selectedModules[sessionId]) ?? matching[0]
     const sharedTeam = snapshot.moduleSessions.archive === sessionId && snapshot.moduleSessions.tasks === sessionId
     const id = expert?.id ?? null
+    const workbenchKey = id === 'design' ? sessionId + ':design:' + (snapshot.designEntries[sessionId] ?? 0) : sessionId + ':' + id
     const previous = id ? snapshot.previousModuleSessions[id] ?? [] : []
     function switchSession(previousId?: string) {
       if (!id) return
@@ -75,7 +76,7 @@ export function apply(ctx: ClientContext): void {
       void navigation.openModule(id, previousId).catch(error => setError(String(error.message ?? error)))
     }
     return <>{error && <p role="alert">{error}</p>}
-      <ModuleWorkbench key={sessionId + ':' + id} id={id} sharedTeam={sharedTeam} archiveService={archiveService} taskService={taskService}
+      <ModuleWorkbench key={workbenchKey} id={id} sharedTeam={sharedTeam} archiveService={archiveService} taskService={taskService}
         historyLinks={expert && previous.length ? [
           ...(previous.includes(sessionId) ? [{ label: '进入 iHome专家团', open: () => switchSession() }] : []),
           ...previous.filter(previousId => previousId !== sessionId).map((previousId, index) => ({

@@ -51,14 +51,31 @@ test('stale, foreign and subagent requests cannot prompt or write; cancellation 
   assert.equal(cancelled.writes(), 0)
 })
 
-test('read model returns lossless JSON for current and saved versions', async () => {
+test('public design tools expose named schemes without snapshots or version fields', async () => {
   const f = await fixture()
   const current = await f.tools.ihome_read_design.execute({}, execution())
   assert.deepEqual(current, JSON.parse(JSON.stringify(current)))
   assert.equal(Object.hasOwn(current, 'versionId'), false)
-  await f.tools.ihome_propose_design.execute({ action: 'snapshot', expectedRevision: 0 }, execution())
-  const versionId = f.state().designs[0].versions[0].id
-  const version = await f.tools.ihome_read_design.execute({ versionId }, execution())
-  assert.equal(version.versionId, versionId)
-  assert.deepEqual(version, JSON.parse(JSON.stringify(version)))
+  assert.equal(Object.hasOwn(current.designs[0], 'versions'), false)
+  assert.equal(Object.hasOwn(f.tools.ihome_read_design.parameters.properties, 'versionId'), false)
+  assert.deepEqual(f.tools.ihome_propose_design.parameters.properties.action.enum, ['create', 'edit', 'copy', 'rename', 'activate'])
+  await assert.rejects(f.tools.ihome_propose_design.execute({ action: 'snapshot', expectedRevision: 0 }, execution()))
+  await f.tools.ihome_propose_design.execute({ action: 'copy', expectedRevision: 0, name: '客厅留白方案' }, execution())
+  const copied = await f.tools.ihome_read_design.execute({}, execution())
+  assert.equal(copied.name, '客厅留白方案')
+  assert.equal(copied.designs.length, 2)
+  assert.deepEqual(copied, JSON.parse(JSON.stringify(copied)))
+})
+
+test('renaming a scheme requires confirmation and preserves its geometry', async () => {
+  const f = await fixture()
+  const before = structuredClone(f.state().designs[0])
+  const result = await f.tools.ihome_propose_design.execute({ action: 'rename', expectedRevision: 0, designId: before.id, name: '南向采光方案' }, execution())
+  assert.equal(result.status, 'applied')
+  assert.equal(f.state().designs[0].name, '南向采光方案')
+  assert.deepEqual(f.state().designs[0].model, before.model)
+  const declined = await fixture('不接受')
+  const name = declined.state().designs[0].name
+  assert.equal((await declined.tools.ihome_propose_design.execute({ action: 'rename', expectedRevision: 0, name: '不应保存' }, execution())).status, 'not_applied')
+  assert.equal(declined.state().designs[0].name, name)
 })

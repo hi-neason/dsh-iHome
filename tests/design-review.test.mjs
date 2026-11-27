@@ -13,14 +13,15 @@ function fixture() {
   floor.items = [{ id: 'room', name: '客厅', kind: 'room', roomId: 'living', x: 0, z: 0, width: 5, depth: 4, height: 2.8, rotation: 0 },
     { id: 'a', name: '桌子', kind: 'furniture', x: 0, z: 0, width: 2, depth: 1, height: 1, rotation: 45 },
     { id: 'b', name: '椅子', kind: 'furniture', x: .1, z: .1, width: 1, depth: 1, height: 1, rotation: -30 }]
-  state = applyDesignCommand(state, { action: 'snapshot', expectedRevision: 0, designId: state.activeId, name: '方案一' })
+  state.designs[0].versions = [{ id: 'legacy-version', name: '旧历史', model: structuredClone(state.designs[0].model), createdAt: '2026-11-27T00:00:00.000Z' }]
   return { state, archive: validateArchive(archive) }
 }
-const args = (state, archive) => ({ expectedRevision: archive.revision, expectedDesignRevision: state.revision, designId: state.activeId, versionId: state.designs[0].versions[0].id, text: '采用客厅留白方案', reason: '保留妈妈活动空间', needIds: ['need'], objectIds: ['room'] })
+const args = (state, archive) => ({ expectedRevision: archive.revision, expectedDesignRevision: state.revision, designId: state.activeId, text: '采用客厅留白方案', reason: '保留妈妈活动空间', needIds: ['need'], objectIds: ['room'] })
 test('review links actual people and needs without claiming fulfillment and compares measured model deltas', () => {
   const { state, archive } = fixture()
+  state.designs.push({ ...structuredClone(state.designs[0]), id: 'baseline', name: '原布局' })
   state.designs[0].model.floors[0].items[0].width = 6
-  const result = reviewDesign(state, archive, { compareVersionId: state.designs[0].versions[0].id })
+  const result = reviewDesign(state, archive, { compareDesignId: 'baseline' })
   assert.equal(result.needs[0].members[0].name, '妈妈')
   assert.deepEqual(result.needs[0].rooms[0].modelObjectIds, ['room'])
   assert.match(result.needs[0].assessment, /不代表/)
@@ -31,12 +32,15 @@ test('review links actual people and needs without claiming fulfillment and comp
   state.designs[0].model.floors[0].items[2].x = 10
   assert.equal(reviewDesign(state, archive, {}).issues.length, 0)
 })
-test('decisions require existing snapshot and references, retain traceable source and superseded history', async () => {
+test('decisions capture current named scheme without requiring a snapshot and preserve history', async () => {
   const { state, archive } = fixture()
   const proposal = await prepareDesignDecision(state, archive, args(state, archive))
   assert.equal(proposal.decision.needIds[0], 'need')
   assert.match(proposal.decision.reason, /modelSha256/)
-  assert.ok(proposal.decision.reason.includes(state.designs[0].versions[0].id))
+  assert.ok(proposal.decision.reason.includes(state.activeId))
+  assert.match(proposal.decision.reason, /capturedAt/)
+  assert.match(proposal.decision.reason, /geometrySummary/)
+  assert.equal(proposal.decision.reason.includes('versionId'), false)
   assert.equal(archive.decisions.length, 0)
   const second = await prepareDesignDecision(state, proposal.next, { ...args(state, proposal.next), supersedesId: proposal.decision.id })
   assert.equal(second.next.decisions.length, 2)
@@ -85,5 +89,26 @@ test('review output is lossless JSON with optional archive fields and absent com
     assert.equal(Object.hasOwn(result.measurements[0], 'attachmentId'), false)
     assert.equal(Object.hasOwn(result.needs[0].rooms[1], 'name'), false)
     assert.equal(Object.hasOwn(result.needs[0].members[0], 'name'), false)
+  }
+})
+
+test('decision works with no snapshots, records geometry at acceptance, and retains legacy reads', async () => {
+  const { state, archive } = fixture()
+  const legacyVersion = state.designs[0].versions[0]
+  const legacy = await prepareDesignDecision(state, archive, { ...args(state, archive), versionId: legacyVersion.id })
+  assert.ok(legacy.decision.reason.includes(legacyVersion.id))
+  state.designs[0].versions = []
+  const first = await prepareDesignDecision(state, archive, args(state, archive))
+  state.designs[0].model.floors[0].items[0].width = 8
+  state.revision++
+  const second = await prepareDesignDecision(state, archive, args(state, archive))
+  const source = decision => JSON.parse(decision.reason.split('设计来源：')[1])
+  assert.notEqual(source(first.decision).modelSha256, source(second.decision).modelSha256)
+  assert.equal(source(first.decision).geometrySummary.roomArea, 20)
+  assert.equal(source(second.decision).geometrySummary.roomArea, 32)
+  const tools = createDesignReviewTools({})
+  for (const tool of tools) {
+    assert.equal(JSON.stringify(tool.parameters).includes('versionId'), false)
+    assert.equal(tool.description.includes('snapshot'), false)
   }
 })

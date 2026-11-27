@@ -32,7 +32,8 @@ test('reads historical reference without falling back to current draft',async()=
   const f=fixture(),value=await f.tool.execute({designId:'scheme',versionId:'v1',floorId:'first'},f.execution)
   assert.deepEqual(f.reads,[historicalId])
   assert.equal(JSON.parse(value.description).calibration.width,10)
-  assert.equal(JSON.parse(value.description).versionName,'原始版本')
+  assert.equal(Object.hasOwn(JSON.parse(value.description),'versionName'),false)
+  assert.equal(Object.hasOwn(f.tool.parameters.properties,'versionId'),false)
 })
 test('rejects unknown selectors and missing references before reading media',async()=>{
   const f=fixture()

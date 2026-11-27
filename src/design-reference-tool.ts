@@ -24,9 +24,9 @@ interface ReferenceOutput {
 export function createDesignReferenceTool(access: DesignReferenceAccess) {
   return {
     name: 'ihome_read_design_reference',
-    description: '读取指定方案和楼层的已校准原始户型底图，返回真实图像与米制位置、宽度、深度。必须指定 floorId；designId 默认当前方案，versionId 可指定历史快照。结合用户确认的尺寸识图，不把推测尺寸或承重性质当作事实。',
+    description: '读取指定方案和楼层的已校准原始户型底图，返回真实图像与米制位置、宽度、深度。必须指定 floorId；designId 默认当前方案。结合用户确认的尺寸识图，不把推测尺寸或承重性质当作事实。',
     parameters: { type: 'object', additionalProperties: false, required: ['floorId'], properties: {
-      floorId: { type: 'string' }, designId: { type: 'string' }, versionId: { type: 'string' },
+      floorId: { type: 'string' }, designId: { type: 'string' },
     } },
     output: {
       schema: {},
@@ -41,7 +41,7 @@ export function createDesignReferenceTool(access: DesignReferenceAccess) {
       const args = raw as Record<string, unknown>
       if (Object.keys(args).some(key => !['designId', 'versionId', 'floorId'].includes(key)) ||
         typeof args.floorId !== 'string' || !args.floorId.trim() ||
-        ['designId', 'versionId'].some(key => args[key] !== undefined && (typeof args[key] !== 'string' || !(args[key] as string).trim()))) throw new Error('请提供有效的方案、版本和楼层编号。')
+        ['designId', 'versionId'].some(key => args[key] !== undefined && (typeof args[key] !== 'string' || !(args[key] as string).trim()))) throw new Error('请提供有效的方案和楼层编号。')
       const state = access.readDesign()
       const design = state.designs.find(value => value.id === (args.designId ?? state.activeId))
       if (!design) throw new Error('方案不存在，请重新读取设计目录。')
@@ -58,7 +58,6 @@ export function createDesignReferenceTool(access: DesignReferenceAccess) {
       execution.signal.throwIfAborted()
       return { description: JSON.stringify({
         revision: state.revision, designId: design.id, designName: design.name,
-        versionId: version?.id ?? null, versionName: version?.name ?? '当前草稿',
         floorId: floor.id, floorName: floor.name, elevation: floor.elevation, height: floor.height,
         sourceAssetId: reference.assetId, referenceName: reference.name,
         calibration: { unit: 'metre', origin: 'top-left', x: reference.x, z: reference.z, width: reference.width, depth: reference.depth },

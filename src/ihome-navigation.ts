@@ -20,8 +20,10 @@ export interface NavigationContext {
 }
 
 export function createIHomeNavigation(ctx: NavigationContext) {
-  type SessionIndex = Pick<IHomeWorkspace, 'moduleSessions' | 'previousModuleSessions'> & { selectedModules: Record<string, ModuleId> }
-  let snapshot: SessionIndex = { moduleSessions: {}, previousModuleSessions: {}, selectedModules: {} }
+  type SessionIndex = Pick<IHomeWorkspace, 'moduleSessions' | 'previousModuleSessions'> & {
+    selectedModules: Record<string, ModuleId>, designEntries: Record<string, number>
+  }
+  let snapshot: SessionIndex = { moduleSessions: {}, previousModuleSessions: {}, selectedModules: {}, designEntries: {} }
   const listeners = new Set<() => void>()
   let initialization: Promise<void> | undefined
   let disposed = false
@@ -61,7 +63,10 @@ export function createIHomeNavigation(ctx: NavigationContext) {
         previousModuleSessions: result.previousModuleSessions ?? { ...snapshot.previousModuleSessions, [moduleId]: result.previousSessionIds ?? [] } })
       await ctx.sessions.refresh()
       if (disposed || revision !== opening || navigation.aborted) return
-      publish({ ...snapshot, selectedModules: { ...snapshot.selectedModules, [result.sessionId]: moduleId } })
+      publish({ ...snapshot,
+        selectedModules: { ...snapshot.selectedModules, [result.sessionId]: moduleId },
+        designEntries: moduleId === 'design' ? { ...snapshot.designEntries, [result.sessionId]: revision } : snapshot.designEntries,
+      })
       ctx.uiWorkspace.openSession(result.sessionId)
       // openSession selects the native chat panel and ends the preceding navigation.
       const surfaceNavigation = ctx.layout.beginNavigation()

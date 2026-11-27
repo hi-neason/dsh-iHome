@@ -12,7 +12,11 @@
 .ih-design [role=alert] { color:light-dark(#a02e19,#ffb09c); margin:0; }
 .ih-design:fullscreen { box-sizing:border-box; display:block; padding:clamp(16px,4vw,64px); overflow:auto; background:Canvas; color:CanvasText; }
 .ih-design:fullscreen > * { margin-bottom:12px; }
-.ih-design-versions { display:grid; gap:7px; }
+.ih-design-list { list-style:none; padding:0; margin:0; }
+.ih-design-list li { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--ih-line); }
+.ih-design-list .ih-scheme-name { text-align:start; overflow-wrap:anywhere; font-weight:600; padding:.65em .5em; background:transparent; border-color:transparent; }
+.ih-design-list .ih-scheme-name:hover { background:var(--ih-soft); }
+.ih-design-heading > h2 { min-width:0; overflow-wrap:anywhere; }
 .ih-design details > summary { cursor:pointer; }
 .ih-reference-points { position:relative; line-height:0; }
 .ih-reference-points img { display:block; width:100%; height:auto; cursor:crosshair; user-select:none; }
