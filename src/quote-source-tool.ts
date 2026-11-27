@@ -1,3 +1,4 @@
+import { listQuoteSheets, openQuotePackage, readQuoteCells, readQuoteParagraphs } from './quote-ooxml.ts'
 import type { DesignImageRef } from './design-reference-tool'
 import type { IHomeToolContext } from './ihome-workspace-path'
 
@@ -92,70 +93,16 @@ function readText(bytes: Uint8Array, args: Record<string, unknown>, name: string
   return { description: JSON.stringify({ file: name, encoding, totalLines: rows.length, lines, next }) }
 }
 
-/** Read only the worksheet names from bounded OOXML workbook metadata. */
-async function sheetNames(zip: Uint8Array, signal: AbortSignal): Promise<string[]> {
-  const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength)
-  const u16 = (offset: number) => view.getUint16(offset, true)
-  const u32 = (offset: number) => view.getUint32(offset, true)
-  let end = zip.length - 22
-  while (end >= Math.max(0, zip.length - 65557)) {
-    if (u32(end) === 0x06054b50 && end + 22 + u16(end + 20) === zip.length) break
-    end--
-  }
-  if (end < Math.max(0, zip.length - 65557) || u16(end + 4) || u16(end + 6)) throw new Error('无法读取工作簿目录。')
-  const count = u16(end + 10)
-  let pos = u32(end + 16)
-  const decoder = new TextDecoder()
-  for (let i = 0; i < Math.min(count, 10000); i++) {
-    if (pos + 46 > end || u32(pos) !== 0x02014b50) break
-    const nameLen = u16(pos + 28), nameStart = pos + 46
-    if (decoder.decode(zip.subarray(nameStart, nameStart + nameLen)) === 'xl/workbook.xml') {
-      const plainSize = u32(pos + 24), compressed = u32(pos + 20), method = u16(pos + 10), local = u32(pos + 42)
-      const cap = 1024 * 1024
-      if (plainSize > cap || compressed > cap || local + 30 > pos || u32(local) !== 0x04034b50) break
-      const start = local + 30 + u16(local + 26) + u16(local + 28)
-      if (start + compressed > pos || (method !== 0 && method !== 8)) break
-      const packed = zip.slice(start, start + compressed)
-      const stream = new Blob([packed]).stream()
-      const reader = (method === 8 ? stream.pipeThrough(new DecompressionStream('deflate-raw')) : stream).getReader()
-      const xmlBytes = new Uint8Array(plainSize)
-      let written = 0
-      try {
-        for (;;) {
-          signal.throwIfAborted()
-          const { value, done } = await reader.read()
-          if (done) break
-          if (written + value.length > plainSize) throw new Error('工作表目录超出声明的长度。')
-          xmlBytes.set(value, written)
-          written += value.length
-        }
-      } finally { await reader.cancel().catch(() => {}) }
-      if (written !== plainSize) break
-      const xml = decoder.decode(xmlBytes).replace(/<!--[\s\S]*?-->/g, '')
-      const entity: Record<string, string> = { amp:'&', apos:"'", quot:'"', lt:'<', gt:'>' }
-      const names: string[] = []
-      for (const match of xml.matchAll(/<(?:[\w.-]+:)?sheet\s+[^>]*?\bname\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>/g)) {
-        names.push((match[1] ?? match[2]).replace(/&(amp|apos|quot|lt|gt|#x[0-9a-fA-F]+|#\d+);/g, (_, code: string) =>
-          entity[code] ?? String.fromCodePoint(code.startsWith('#x') ? parseInt(code.slice(2), 16) : Number(code.slice(1)))))
-        if (names.length > 1000) throw new Error('工作表数量超出读取范围。')
-      }
-      if (names.length) return names
-      break
-    }
-    pos = nameStart + nameLen + u16(pos + 30) + u16(pos + 32)
-  }
-  throw new Error('无法读取工作表目录，请指定工作表名称及 A1 区域。')
-}
-
 export function createQuoteSourceTool(access: QuoteSourceAccess) {
   return {
     name: 'ihome_read_quote_source',
-    description: '读取本轮用户附上的装修报价或合同原件。空参数列出文件，再传 index（从1开始）或完整 name。TXT/CSV/TSV 返回带原行号的文本，按 next 续读；中文旧表可传 encoding=gb18030。PDF/DOCX 用 page（默认1）逐页看图；XLSX 不传 sheet 先列工作表，再传 sheet、range（默认 A1:H25）。按返回的文件名、行号、页码或区域引用原件。',
+    description: '读取本轮用户附上的装修报价或合同原件。空参数列出文件，再传 index（从1开始）或完整 name。TXT/CSV/TSV 返回带原行号的文本，按 next 续读；中文旧表可传 encoding=gb18030。PDF 用 page 逐页看图。DOCX 默认返回正文段落和表格位置，用 startParagraph、paragraphCount、next 续读。XLSX 不传 sheet 列表，指定 sheet、range（默认 A1:H25）读取单元格、原始值和公式缓存。DOCX/XLSX 可显式传 view=image 核对版式。按返回的文件名、行号、页码或区域引用原件。',
     parameters: { type: 'object', additionalProperties: false, properties: {
       index: { type: 'integer', minimum: 1 }, name: { type: 'string' },
       startLine: { type: 'integer', minimum: 1 }, lineCount: { type: 'integer', minimum: 1, maximum: 100 }, startColumn: { type: 'integer', minimum: 1 },
       encoding: { type: 'string', enum: ['utf-8','utf-16le','utf-16be','gb18030'] }, page: { type: 'integer', minimum: 1 },
-      sheet: { type: 'string' }, range: { type: 'string' },
+      sheet: { type: 'string' }, range: { type: 'string' }, view: { type: 'string', enum: ['text','image'] },
+      startParagraph: { type: 'integer', minimum: 1 }, paragraphCount: { type: 'integer', minimum: 1, maximum: 80 },
     } },
     output: { schema: {}, render(_args: unknown, raw: unknown) {
       const result = raw as Result
@@ -183,14 +130,24 @@ export function createQuoteSourceTool(access: QuoteSourceAccess) {
         return readText(await readExact(access, file, signal, maxText), args, file.name)
       }
       if (ext !== 'pdf' && ext !== 'docx' && ext !== 'xlsx') throw new Error('支持 TXT、CSV、TSV、PDF、DOCX、XLSX 原件；其他格式可另存为其中一种。')
-      allowed(args, ext === 'xlsx' ? ['sheet','range'] : ['page'])
+      if ('view' in args && args.view !== 'image' && args.view !== 'text') throw new Error('请选择 text 或 image 读取模式。')
+      const textView = (args.view ?? (ext === 'pdf' ? 'image' : 'text')) === 'text'
+      if (ext === 'pdf' && textView) throw new Error('PDF 按页读取，请使用 view=image。')
+      allowed(args, ['view', ...(ext === 'xlsx' ? ['sheet','range'] : textView ? ['startParagraph','paragraphCount','startColumn'] : ['page'])])
       if (!Number.isSafeInteger(file.bytes) || file.bytes < 1 || file.bytes > maxDocument) throw new Error('原件为空或超过 24 MiB，请分拆后附上。')
+      const parts = async () => openQuotePackage(await readExact(access, file, signal, maxDocument), signal)
       if (ext === 'xlsx' && args.sheet === undefined) {
         if ('range' in args) throw new Error('请先指定区域所属的工作表。')
-        const sheets = await sheetNames(await readExact(access, file, signal, maxDocument), signal)
+        const sheets = await listQuoteSheets(await parts())
         return { description: JSON.stringify({ file: file.name, sheets, hint: '指定 sheet 和 range 读取明细，如 A1:H25。' }) }
       }
       if (ext === 'xlsx' && (typeof args.sheet !== 'string' || !args.sheet.trim() || args.sheet.length > 31)) throw new Error('请选择有效的工作表名称。')
+      if (textView) {
+        const result = ext === 'xlsx'
+          ? await readQuoteCells(await parts(), args.sheet as string, selectedRange(args.range ?? 'A1:H25'))
+          : await readQuoteParagraphs(await parts(), integer(args.startParagraph ?? 1, '起始段落', 1000000), integer(args.paragraphCount ?? 30, '读取段落数', 80), integer(args.startColumn ?? 1, '起始字符列', 10 * 1024 * 1024))
+        return { description: JSON.stringify({ file: file.name, ...result }) }
+      }
       if (!access.render) throw new Error('当前宿主未加载 Office 渲染服务。可提供相应页截图，或另存为 CSV/TSV 后读取。')
       const selection = ext === 'xlsx' ? { sheet: args.sheet as string, range: selectedRange(args.range ?? 'A1:H25') } : { pages: [integer(args.page ?? 1, '页码', 1000000)] }
       const request: QuoteOfficeRequest = { extension: ext, source: {

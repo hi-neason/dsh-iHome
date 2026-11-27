@@ -53,7 +53,7 @@ test('文本保留 CSV/TSV 原文行号，长行能够无损续读并支持 UTF1
 test('图片按文件扩展与页码调用宿主，持久图片引用和原页位置一并交付', async () => {
   const data = new Uint8Array([32, 33]), f = fixture([['变更.pdf',data],['合同.docx',data]])
   for (const [index,extension,page] of [[1,'pdf',2],[2,'docx',1]]) {
-    const value = await f.run({ index, page })
+    const value = await f.run({ index, page, view: 'image' })
     const [request] = f.renders.slice(-1)
     assert.equal(request.extension,extension);assert.deepEqual(request.pages,[page]);assert.equal(request.maxImages,1)
     assert.ok(request.maxPixels > 0 && request.maxDimension > 0 && request.maxBytes > 0)
@@ -72,7 +72,7 @@ test('工作簿读取真实 deflate 目录，仅将指定的有限区域送给 O
   const f = fixture([['变更.XLSX',workbook]])
   assert.deepEqual((await f.detail({index:1})).sheets,['基础工程','水&电'])
   assert.equal(f.renders.length,0)
-  const value = await f.detail({index:1,sheet:'水&电',range:'c2:e9'})
+  const value = await f.detail({index:1,view:'image',sheet:'水&电',range:'c2:e9'})
   assert.deepEqual(value.locations,[{sheet:'水&电',range:'C2:E9'}])
   assert.equal(f.renders[0].pages,undefined)
   for (const args of [{range:'A1:D1'},{sheet:'水&电',range:'A1:ZZ999'},{sheet:'x',range:'A40:A1'},{sheet:'x',range:'D1:B9'},
