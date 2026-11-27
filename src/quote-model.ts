@@ -1,3 +1,6 @@
+import { parseQuoteVersion, type QuoteVersion } from './quote-version.ts'
+export type { QuoteVersion, QuoteLine } from './quote-version.ts'
+
 export interface QuoteVendor {
   id: string
   name: string
@@ -12,6 +15,7 @@ export interface QuoteVendor {
 export interface QuoteBoard {
   revision: number
   vendors: QuoteVendor[]
+  quotes: QuoteVersion[]
 }
 
 export function quoteObject(value: unknown): Record<string, unknown> {
@@ -46,10 +50,20 @@ export function parseQuoteBoard(value: unknown): QuoteBoard {
   const row = quoteObject(value)
   if (typeof row.revision !== 'number' || !Number.isSafeInteger(row.revision) || row.revision < 0)
     throw new Error('选商档案版本无效。')
-  return { revision: row.revision, vendors: records(row.vendors, parseVendor) }
+  const vendors = records(row.vendors, parseVendor)
+  const quotes = records(row.quotes === undefined ? [] : row.quotes, parseQuoteVersion)
+  const vendorIds = new Set(vendors.map(vendor => vendor.id))
+  const versions = new Set<string>()
+  for (const quote of quotes) {
+    if (!vendorIds.has(quote.vendorId)) throw new Error('报价关联的团队不存在。')
+    const key = JSON.stringify([quote.vendorId, quote.version])
+    if (versions.has(key)) throw new Error('同一团队的报价版本名称须唯一。')
+    versions.add(key)
+  }
+  return { revision: row.revision, vendors, quotes }
 }
 
-export const quoteCollections = ['vendors'] as const
+export const quoteCollections = ['vendors', 'quotes'] as const
 export type QuoteCollection = typeof quoteCollections[number]
 export class QuoteConflict extends Error {}
 
@@ -66,5 +80,6 @@ export function changeQuoteBoard(board: QuoteBoard, value: unknown): QuoteBoard 
   if (!saved) throw new Error('请使用没有首尾空格的记录编号。')
   if (previous && JSON.stringify(saved) === JSON.stringify(previous)) return board
   if (raw.expectedRevision !== board.revision) throw new QuoteConflict('选商档案已有更新，请刷新并核对后再保存。')
+  if (previous && collection === 'quotes') throw new Error('报价原版已保存，请另存新版本。')
   return next
 }

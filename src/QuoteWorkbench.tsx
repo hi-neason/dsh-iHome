@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { requestIHome } from './ihome-http'
 import { parseQuoteBoard, parseVendor, type QuoteBoard, type QuoteCollection, type QuoteVendor } from './quote-model'
+import { QuoteIntake } from './QuoteIntake'
 import css from './quote-workbench.css'
 
 const vendorFields = [
@@ -34,7 +35,7 @@ function Vendors({ board, onSave }: { board: QuoteBoard, onSave: (vendor: QuoteV
   </section>
 }
 
-const sections = { vendors: '候选团队' }
+const sections = { vendors: '候选团队', quotes: '报价版本' }
 export function QuoteWorkbench({ onAsk }: { onAsk: (prompt: string) => void }) {
   const [board, setBoard] = useState<QuoteBoard>()
   const [tab, setTab] = useState<keyof typeof sections>('vendors')
@@ -68,6 +69,7 @@ export function QuoteWorkbench({ onAsk }: { onAsk: (prompt: string) => void }) {
     {!board ? <p>{error ? '暂时无法打开档案。' : '正在读取选商档案…'}</p> : <>
       <nav aria-label="选商核价功能">{(Object.keys(sections) as (keyof typeof sections)[]).map(key =>
         <button key={key} aria-pressed={tab === key} onClick={() => { setTab(key); setNotice('') }}>{sections[key]}</button>)}</nav>
+      {tab === 'quotes' && <QuoteIntake board={board} onSave={row => save('quotes', row)} />}
       {tab === 'vendors' && <Vendors board={board} onSave={row => save('vendors', row)} />}
     </>}
   </div>
