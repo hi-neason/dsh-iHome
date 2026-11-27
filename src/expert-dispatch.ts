@@ -148,7 +148,11 @@ export async function consultExpert(
   if (typeof args.task !== 'string' || !args.task.trim() || args.task.length > 12000) throw new Error('请提供有效的专家任务，最多 12000 字。')
   if (args.context !== undefined && (typeof args.context !== 'string' || args.context.length > 24000)) throw new Error('专家上下文最多 24000 字。')
   const expert = args.expert as ExpertRole
-  const text = [`本次委派任务\n${args.task.trim()}`, args.context && `主会话提供的相关上下文\n${args.context}`, '请返回分析、待澄清问题及建议修改。任何数据写入和用户确认都交给主 Agent 处理。'].filter(Boolean).join('\n\n')
+  const deliverable = expert === 'ihome-floorplan-designer'
+    ? '建模请求请返回当前可以绘制的几何变更。房名和用途可以留空，局部疑点随提案说明。仅在请求评审时分析居住需求。'
+    : '请返回分析、待澄清问题及建议修改。'
+  const text = [`本次委派任务\n${args.task.trim()}`, args.context && `主会话提供的相关上下文\n${args.context}`,
+    deliverable, '任何数据写入和用户确认都交给主 Agent 处理。'].filter(Boolean).join('\n\n')
   const childId = crypto.randomUUID()
   const provider = expertProviders[expert]
   pendingStarts.set(childId, { parent: execution.agent, provider })

@@ -111,6 +111,28 @@ test('confirmed source create and second edit persist actual code and undo resto
   assert.throws(() => prepareDesignProposal(f.state(), { action: 'edit', expectedRevision: 3, designId, operations: [{ entity: 'wall', action: 'remove', floorId: 'floor', id: 'old-wall' }] }), /源码/)
 })
 
+test('geometry can be proposed and saved without room records, room labels or a reference image', async () => {
+  const f = await fixture()
+  const initial = f.state()
+  const floor = initial.designs[0].model.floors[0]
+  const source = `export function buildFloor(THREE) {
+    const group = new THREE.Group();
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(4, 2.8, 0.15), new THREE.MeshStandardMaterial());
+    wall.position.set(0, 1.4, 0);
+    group.add(wall);
+    return group;
+  }`
+  const result = await f.tools.ihome_propose_design.execute({
+    action: 'edit', expectedRevision: initial.revision, designId: initial.activeId,
+    operations: [{ entity: 'floor', action: 'upsert', id: floor.id, value: { source } }],
+  }, execution())
+  assert.equal(result.status, 'applied')
+  assert.equal(f.questions(), 1)
+  assert.equal(f.state().designs.length, 1)
+  const updated = f.state().designs[0].model.floors[0]
+  assert.deepEqual(updated, { ...floor, source })
+})
+
 test('source confirmation is readable, identifies actual floors and replacement, and never prints source', () => {
   const state = createDesignState(), floor = state.designs[0].model.floors[0]
   floor.walls = [{ id: 'wall', name: '旧墙', x1: 0, z1: 0, x2: 3, z2: 0, thickness: .2 }]

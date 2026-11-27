@@ -35,12 +35,23 @@ test('reads historical reference without falling back to current draft',async()=
   assert.equal(Object.hasOwn(JSON.parse(value.description),'versionName'),false)
   assert.equal(Object.hasOwn(f.tool.parameters.properties,'versionId'),false)
 })
-test('rejects unknown selectors and missing references before reading media',async()=>{
+test('rejects unknown selectors before reading media',async()=>{
   const f=fixture()
   for(const args of [{},{floorId:'absent'},{floorId:'first',designId:'absent'},{floorId:'first',versionId:'absent'},{floorId:'first',path:'/tmp/a'},{floorId:'first',designId:3}]) await assert.rejects(f.tool.execute(args,f.execution))
-  delete f.state.designs[0].model.floors[0].reference
-  await assert.rejects(f.tool.execute({floorId:'first'},f.execution),/可以直接使用当前对话中的户型图片/)
   assert.equal(f.reads.length,0)
+})
+test('a valid floor without a reference returns only text and needs no attachment', async () => {
+  const f = fixture()
+  delete f.state.designs[0].model.floors[0].reference
+  const result = await f.tool.execute({floorId:'first'}, f.execution)
+  const blocks = f.tool.output.render({}, result)
+  assert.equal(blocks.length, 1)
+  assert.equal(blocks[0].type, 'text')
+  const info = JSON.parse(blocks[0].text)
+  assert.equal(info.reference, null)
+  assert.equal(info.floorId, 'first')
+  assert.equal(f.reads.length, 0)
+  assert.equal(f.saves.length, 0)
 })
 test('rejects non-image data and propagates decode and media errors',async()=>{
   const f=fixture()

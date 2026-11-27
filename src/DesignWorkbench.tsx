@@ -83,7 +83,7 @@ function SchemeViewer({ scheme, busy, error, onAsk, apply, back }: {
     const context = '方案「' + scheme.name + '」(' + scheme.id + ')'
     const subject = allFloors ? context + '的整栋模型' : context + '的「' + floor.name + '」(' + floor.id + ')'
     onAsk('/户型设计师 ' + (hasContent ? '我想调整' + subject + '：' :
-      '请根据我提供的户型图或布局描述，为' + context + '建立 Three.js 模型。'))
+      '请根据我提供的布局描述或户型图，为' + context + '建立 Three.js 模型，先画墙体、门窗和空间轮廓。'))
   }
   return <section className="ih-design ih-scheme-viewer" aria-label="户型方案预览" aria-busy={busy}>
     <style>{css}</style>
@@ -114,8 +114,8 @@ function SchemeViewer({ scheme, busy, error, onAsk, apply, back }: {
           onClick={() => void apply({ action: 'undo', designId: scheme.id })}>撤销上次修改</button>
       </div>
     </> : <div className="ih-viewer-empty">
-      <h3>从一张户型图开始</h3>
-      <p>在会话里发一张户型图，或描述房屋布局。</p>
+      <h3>这个方案还没有模型</h3>
+      <p>在会话里描述布局，或发一张户型图。</p>
       <button type="button" className="ih-design-chat" onClick={ask}>在会话中建模</button>
       {scheme.previousModel && <button type="button" disabled={busy}
         onClick={() => void apply({ action: 'undo', designId: scheme.id })}>撤销上次修改</button>}

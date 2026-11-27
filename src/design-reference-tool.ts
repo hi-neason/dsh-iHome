@@ -18,13 +18,13 @@ export interface DesignReferenceAccess {
 }
 interface ReferenceOutput {
   description: string
-  image: DesignImageRef
+  image?: DesignImageRef
 }
 
 export function createDesignReferenceTool(access: DesignReferenceAccess) {
   return {
     name: 'ihome_read_design_reference',
-    description: '读取指定方案和楼层的已校准原始户型底图，返回真实图像与米制位置、宽度、深度。必须指定 floorId；designId 默认当前方案。结合用户确认的尺寸识图，不把推测尺寸或承重性质当作事实。',
+    description: '查看旧工程已保存的参考图片及米制范围。仅在 ihome_read_design 显示该层有 reference 且需要这张图片时调用。普通会话附图直接可用，文字建模也可独立进行。',
     parameters: { type: 'object', additionalProperties: false, required: ['floorId'], properties: {
       floorId: { type: 'string' }, designId: { type: 'string' },
     } },
@@ -32,7 +32,8 @@ export function createDesignReferenceTool(access: DesignReferenceAccess) {
       schema: {},
       render(_args: unknown, raw: unknown): ({ type: 'text', text: string } | { type: 'image', attachment: DesignImageRef })[] {
         const value = raw as ReferenceOutput
-        return [{ type: 'text', text: value.description }, { type: 'image', attachment: value.image }]
+        const message = { type: 'text' as const, text: value.description }
+        return value.image ? [message, { type: 'image', attachment: value.image }] : [message]
       },
     },
     async execute(raw: unknown, execution: { signal: AbortSignal }): Promise<ReferenceOutput> {
@@ -50,7 +51,10 @@ export function createDesignReferenceTool(access: DesignReferenceAccess) {
       const floor = (version?.model ?? design.model).floors.find(value => value.id === args.floorId)
       if (!floor) throw new Error('指定楼层不存在。')
       const reference = floor.reference
-      if (!reference) throw new Error('该楼层没有已保存的底图。可以直接使用当前对话中的户型图片。')
+      if (!reference) return { description: JSON.stringify({
+        designId: design.id, floorId: floor.id, reference: null,
+        note: '按当前布局描述、会话附图或已有模型继续建模。',
+      }) }
       const media = await access.readMedia(reference.assetId, execution.signal)
       execution.signal.throwIfAborted()
       if (!['image/png', 'image/jpeg', 'image/webp'].includes(media.mime)) throw new Error('底图素材不是支持的图片。')
