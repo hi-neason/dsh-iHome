@@ -170,7 +170,12 @@ test('公司审核冻结选定版本和引文，拒绝错配、缺依据和过�
   await assert.rejects(f.read({ assessmentScope:[{ ...selections[0], vendorId:'v2' }] }), /不属于/)
   await assert.rejects(f.propose('assessments', { ...record, findings:[{ ...record.findings[0], citations:[] }] }), /引用/)
   await assert.rejects(f.propose('assessments', { ...record, findings:[{ ...record.findings[0], citations:[{...citations[0], type:'vendor', id:'v2'}] }] }), /超出/)
-  assert.equal((await f.propose('assessments', record)).status, 'applied')
+  const unsupported = { ...record.findings[1], detail:'含税口径可能有3%～9%的误差', citations }
+  await assert.rejects(f.propose('assessments', { ...record, findings:[unsupported] }), /百分比缺少原文依据/)
+  const receipt = await f.propose('assessments', record)
+  assert.equal(receipt.status, 'applied')
+  assert.deepEqual(receipt.counts, { total:2, findings:1, gaps:1 })
+  assert.equal(receipt.summary, record.summary)
   assert.match(f.questions.at(-1).detail, /甲装修[\s\S]*第一张第7行[\s\S]*同城同条件样本/)
   assert.equal((await f.propose('assessments', record)).status, 'unchanged')
   assert.equal((await f.propose('assessments', { ...record, id:'stale' })).status, 'conflict')

@@ -123,6 +123,13 @@ export function freezeAssessment(board: QuoteBoard, value: unknown): CompanyAsse
     if (JSON.stringify(parseDraft(existing)) !== JSON.stringify(draft)) throw new Error('审核报告已归档，请另存新报告。')
     return existing
   }
+  for (const finding of draft.findings) {
+    if (finding.status !== 'gap') continue
+    const rates = (text: string) => Array.from(text.normalize('NFKC').matchAll(/\d+(?:\.\d+)?\s*%/g), match => parseFloat(match[0]))
+    const cited = new Set(finding.citations.flatMap(c => rates(c.excerpt)))
+    if (rates(finding.detail + ' ' + finding.question).some(value => !cited.has(value)))
+      throw new Error('待补证事项中的百分比缺少原文依据。请补充对应摘录，或保留为询价问题；可复算的价差请附原始数字和算式列入审核发现。')
+  }
   if (draft.basisRevision !== board.revision) throw new QuoteConflict('审核所依据的档案已有更新，请重新核对选定版本后归档。')
   const sources = new Map<string, string>()
   const add = (type: SourceType, id: string, label: string) => sources.set(JSON.stringify([type, id]), label)

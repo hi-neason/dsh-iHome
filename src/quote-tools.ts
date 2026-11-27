@@ -163,7 +163,13 @@ export function registerQuoteTools(
         const [answer] = answers
         if (answers.length !== 1 || answer?.id !== id || answer.custom?.trim() || answer.selected.length !== 1 || answer.selected[0] !== '接受') return { status: 'not_applied', message: '本次选商记录未保存。' }
         const saved = await save(args, signal)
-        return { status: 'applied', revision: saved.revision, collection, id: recordId }
+        const receipt = { status: 'applied', revision: saved.revision, collection, id: recordId }
+        if (collection !== 'assessments') return receipt
+        const assessment = saved.assessments.find(a => a.id === recordId)!
+        const gaps = assessment.findings.filter(f => f.status === 'gap').length
+        return { ...receipt, summary: assessment.summary, counts: {
+          total: assessment.findings.length, findings: assessment.findings.length - gaps, gaps,
+        } }
       } catch (error) {
         if (error instanceof QuoteConflict) return { status: 'conflict', message: error.message }
         throw error
