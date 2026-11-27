@@ -1,3 +1,4 @@
+import { quoteDocumentInfo } from './quote-documents.ts'
 import type { ArchiveHostContext, ArchiveTool } from './archive-host'
 import { allowedExpertTools } from './expert-dispatch.ts'
 import { compareQuotes } from './quote-analysis.ts'
@@ -78,7 +79,8 @@ function readQuotes(board: QuoteBoard, raw: unknown) {
   const compact = quotes.reduce((sum, quote) => sum + quote.lines.length, 0) > 40
   const keys = new Set(quotes.flatMap(quote => quote.lines.map(line => line.key)))
   const relevantDecisions = 'vendorId' in query ? decisions.filter(item => item.comparedQuoteIds.some(id => quoteIds.has(id))) : decisions
-  return { revision: board.revision, vendors, scopeItems: board.scopeItems, quotes: quotes.map(quote => {
+  return { revision: board.revision, vendors,
+    documents:board.documents.filter(doc => !('vendorId' in query) || doc.vendorId === query.vendorId).map(quoteDocumentInfo), scopeItems: board.scopeItems, quotes: quotes.map(quote => {
     if (!compact && JSON.stringify(quote).length <= 12000) return quote
     const { lines, ...metadata } = quote
     return { ...metadata, lineCount: lines.length, queryHint }

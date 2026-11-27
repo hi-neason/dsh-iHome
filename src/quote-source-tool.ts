@@ -1,3 +1,4 @@
+import { quoteDocumentInfo, type QuoteDocument } from './quote-documents.ts'
 import { listQuoteSheets, openQuotePackage, readQuoteCells, readQuoteParagraphs } from './quote-ooxml.ts'
 import type { DesignImageRef } from './design-reference-tool'
 import type { IHomeToolContext } from './ihome-workspace-path'
@@ -24,9 +25,10 @@ export interface QuoteOfficeResult {
 }
 export interface QuoteSourceAccess {
   files(execution: Execution): readonly QuoteFileRef[]
+  documents?(vendorId:string): readonly QuoteDocument[]
   read(ref: QuoteFileRef, signal: AbortSignal): Promise<Uint8Array>
   render?(request: QuoteOfficeRequest, signal: AbortSignal): Promise<QuoteOfficeResult>
-  saveImage(input: { data: Uint8Array, mediaType: 'image/png', name: string }): Promise<DesignImageRef>
+  saveImage(input: { data: Uint8Array, mediaType: 'image/png' | 'image/jpeg', name: string }): Promise<DesignImageRef>
 }
 
 const maxDocument = 24 * 1024 * 1024
@@ -96,9 +98,9 @@ function readText(bytes: Uint8Array, args: Record<string, unknown>, name: string
 export function createQuoteSourceTool(access: QuoteSourceAccess) {
   return {
     name: 'ihome_read_quote_source',
-    description: '读取本轮用户附上的装修报价或合同原件。空参数列出文件，再传 index（从1开始）或完整 name。TXT/CSV/TSV 返回带原行号的文本，按 next 续读；中文旧表可传 encoding=gb18030。PDF 用 page 逐页看图。DOCX 默认返回正文段落和表格位置，用 startParagraph、paragraphCount、next 续读。XLSX 不传 sheet 列表，指定 sheet、range（默认 A1:H25）读取单元格、原始值和公式缓存。DOCX/XLSX 可显式传 view=image 核对版式。按返回的文件名、行号、页码或区域引用原件。',
+    description: '读取按公司归档或本轮附上的原件。传 vendorId 列此公司资料及各版本，指定 vendorId、documentId 读取该版本。PNG/JPEG 返回原图。空参数列本轮附件，再传 index（从1开始）或完整 name。TXT/CSV/TSV 返回带原行号的文本，按 next 续读；中文旧表可传 encoding=gb18030。PDF 用 page 逐页看图。DOCX 默认返回正文段落和表格位置，用 startParagraph、paragraphCount、next 续读。XLSX 不传 sheet 列表，指定 sheet、range（默认 A1:H25）读取单元格、原始值和公式缓存。DOCX/XLSX 可显式传 view=image 核对版式。按返回的文件名、行号、页码或区域引用原件。',
     parameters: { type: 'object', additionalProperties: false, properties: {
-      index: { type: 'integer', minimum: 1 }, name: { type: 'string' },
+      index: { type: 'integer', minimum: 1 }, name: { type: 'string' }, vendorId: { type: 'string' }, documentId: { type: 'string' },
       startLine: { type: 'integer', minimum: 1 }, lineCount: { type: 'integer', minimum: 1, maximum: 100 }, startColumn: { type: 'integer', minimum: 1 },
       encoding: { type: 'string', enum: ['utf-8','utf-16le','utf-16be','gb18030'] }, page: { type: 'integer', minimum: 1 },
       sheet: { type: 'string' }, range: { type: 'string' }, view: { type: 'string', enum: ['text','image'] },
@@ -113,6 +115,19 @@ export function createQuoteSourceTool(access: QuoteSourceAccess) {
       signal.throwIfAborted()
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('请提供附件读取条件。')
       const args = raw as Record<string, unknown>
+      if ('vendorId' in args || 'documentId' in args) {
+        const { vendorId, documentId, ...options } = args
+        if (typeof vendorId !== 'string' || !vendorId.trim() || !access.documents) throw new Error('请指定已登记公司的 vendorId。')
+        const documents = access.documents(vendorId).filter(doc => doc.vendorId === vendorId)
+        if (documentId === undefined && !Object.keys(options).length) {
+          return { description:JSON.stringify({ vendorId, documents:documents.map(quoteDocumentInfo), hint:'指定 vendorId 和 documentId 读取所选版本。' }) }
+        }
+        if ('index' in options || 'name' in options) throw new Error('公司原件请按所属公司及资料版本编号读取。')
+        const document = documents.find(doc => doc.id === documentId)
+        if (!document) throw new Error('此公司没有指定的资料版本。')
+        const result = await readSourceBody(access, document.file, options, signal)
+        return { ...result, description:JSON.stringify({ ...JSON.parse(result.description), document:quoteDocumentInfo(document) }) }
+      }
       const files = access.files(execution)
       if (!Object.keys(args).length) return { description: JSON.stringify({ files: files.map(({ name, bytes }, i) => ({ index: i + 1, name, bytes })),
         hint: files.length ? '传 index 或完整文件名选择附件。' : '请业主在本轮附上原件或粘贴原文。' }) }
@@ -124,53 +139,65 @@ export function createQuoteSourceTool(access: QuoteSourceAccess) {
         if (matches.length !== 1) throw new Error('附件名重复或不在本轮，请从清单选择序号。')
         file = matches[0]
       }
-      const ext = file.name.split('.').pop()?.toLowerCase()
-      if (ext === 'txt' || ext === 'csv' || ext === 'tsv') {
-        allowed(args, ['startLine', 'lineCount', 'startColumn', 'encoding'])
-        return readText(await readExact(access, file, signal, maxText), args, file.name)
-      }
-      if (ext !== 'pdf' && ext !== 'docx' && ext !== 'xlsx') throw new Error('支持 TXT、CSV、TSV、PDF、DOCX、XLSX 原件；其他格式可另存为其中一种。')
-      if ('view' in args && args.view !== 'image' && args.view !== 'text') throw new Error('请选择 text 或 image 读取模式。')
-      const textView = (args.view ?? (ext === 'pdf' ? 'image' : 'text')) === 'text'
-      if (ext === 'pdf' && textView) throw new Error('PDF 按页读取，请使用 view=image。')
-      allowed(args, ['view', ...(ext === 'xlsx' ? ['sheet','range'] : textView ? ['startParagraph','paragraphCount','startColumn'] : ['page'])])
-      if (!Number.isSafeInteger(file.bytes) || file.bytes < 1 || file.bytes > maxDocument) throw new Error('原件为空或超过 24 MiB，请分拆后附上。')
-      const parts = async () => openQuotePackage(await readExact(access, file, signal, maxDocument), signal)
-      if (ext === 'xlsx' && args.sheet === undefined) {
-        if ('range' in args) throw new Error('请先指定区域所属的工作表。')
-        const sheets = await listQuoteSheets(await parts())
-        return { description: JSON.stringify({ file: file.name, sheets, hint: '指定 sheet 和 range 读取明细，如 A1:H25。' }) }
-      }
-      if (ext === 'xlsx' && (typeof args.sheet !== 'string' || !args.sheet.trim() || args.sheet.length > 31)) throw new Error('请选择有效的工作表名称。')
-      if (textView) {
-        const result = ext === 'xlsx'
-          ? await readQuoteCells(await parts(), args.sheet as string, selectedRange(args.range ?? 'A1:H25'))
-          : await readQuoteParagraphs(await parts(), integer(args.startParagraph ?? 1, '起始段落', 1000000), integer(args.paragraphCount ?? 30, '读取段落数', 80), integer(args.startColumn ?? 1, '起始字符列', 10 * 1024 * 1024))
-        return { description: JSON.stringify({ file: file.name, ...result }) }
-      }
-      if (!access.render) throw new Error('当前宿主未加载 Office 渲染服务。可提供相应页截图，或另存为 CSV/TSV 后读取。')
-      const selection = ext === 'xlsx' ? { sheet: args.sheet as string, range: selectedRange(args.range ?? 'A1:H25') } : { pages: [integer(args.page ?? 1, '页码', 1000000)] }
-      const request: QuoteOfficeRequest = { extension: ext, source: {
-        key: JSON.stringify(['ihome-quote-source', file.attachmentId, ext]), version: file.attachmentId, bytes: file.bytes,
-        async read(readSignal, maxBytes) { return { bytes: await readExact(access, file, readSignal, Math.min(maxBytes, maxDocument)), version: file.attachmentId } },
-      }, ...selection, dpi: 120, maxImages: ext === 'xlsx' ? 4 : 1, maxPixels: 5_000_000, maxDimension: 3000, maxBytes: 5_000_000 }
-      let result: QuoteOfficeResult
-      try { result = await access.render(request, signal) }
-      catch (error) {
-        signal.throwIfAborted()
-        throw new Error('无法渲染指定页或区域，请核对页码、工作表名并缩小范围。' + (error instanceof Error ? ' ' + error.message : ''))
-      }
-      signal.throwIfAborted()
-      const size = result.images.reduce((total, img) => total + img.png.byteLength, 0)
-      if (!result.images.length || result.images.length > request.maxImages || size > request.maxBytes) throw new Error('渲染未返回有效大小的页面，请缩小范围。')
-      const images: DesignImageRef[] = []
-      for (const [i, image] of result.images.entries()) {
-        if (!image.png.byteLength || image.width <= 0 || image.height <= 0 || image.width > request.maxDimension || image.height > request.maxDimension || image.width * image.height > request.maxPixels) throw new Error('渲染图片尺寸无效，请缩小范围。')
-        images.push(await access.saveImage({ data: image.png, mediaType: 'image/png', name: file.name + '-' + (i + 1) + '.png' }))
-        signal.throwIfAborted()
-      }
-      return { description: JSON.stringify({ file: file.name, pageCount: result.pageCount, dpi: result.dpi, missingFonts: result.missingFonts,
-        locations: result.images.map(({page,sheet,range}) => ({page,sheet,range})) }), images }
+      return readSourceBody(access, file, args, signal)
     },
   }
+}
+
+async function readSourceBody(access: QuoteSourceAccess, file: QuoteFileRef, args: Record<string,unknown>, signal: AbortSignal): Promise<Result> {
+  const ext = file.name.split('.').pop()?.toLowerCase()
+  if (ext === 'png' || ext === 'jpg' || ext === 'jpeg') {
+    allowed(args, ['view'])
+    if (args.view !== undefined && args.view !== 'image') throw new Error('图纸原件请按图片查看。')
+    const data = await readExact(access, file, signal, maxDocument)
+    const image = await access.saveImage({ data, mediaType:ext === 'png' ? 'image/png' : 'image/jpeg', name:file.name })
+    signal.throwIfAborted()
+    return { description:JSON.stringify({ file:file.name, width:image.width, height:image.height }), images:[image] }
+  }
+  if (ext === 'txt' || ext === 'csv' || ext === 'tsv') {
+    allowed(args, ['startLine', 'lineCount', 'startColumn', 'encoding'])
+    return readText(await readExact(access, file, signal, maxText), args, file.name)
+  }
+  if (ext !== 'pdf' && ext !== 'docx' && ext !== 'xlsx') throw new Error('可读取 PNG、JPEG、TXT、CSV、TSV、PDF、DOCX、XLSX。其他原件可在公司资料中打开或下载。')
+  if ('view' in args && args.view !== 'image' && args.view !== 'text') throw new Error('请选择 text 或 image 读取模式。')
+  const textView = (args.view ?? (ext === 'pdf' ? 'image' : 'text')) === 'text'
+  if (ext === 'pdf' && textView) throw new Error('PDF 按页读取，请使用 view=image。')
+  allowed(args, ['view', ...(ext === 'xlsx' ? ['sheet','range'] : textView ? ['startParagraph','paragraphCount','startColumn'] : ['page'])])
+  if (!Number.isSafeInteger(file.bytes) || file.bytes < 1 || file.bytes > maxDocument) throw new Error('原件为空或超过 24 MiB，请分拆后附上。')
+  const parts = async () => openQuotePackage(await readExact(access, file, signal, maxDocument), signal)
+  if (ext === 'xlsx' && args.sheet === undefined) {
+    if ('range' in args) throw new Error('请先指定区域所属的工作表。')
+    const sheets = await listQuoteSheets(await parts())
+    return { description: JSON.stringify({ file: file.name, sheets, hint: '指定 sheet 和 range 读取明细，如 A1:H25。' }) }
+  }
+  if (ext === 'xlsx' && (typeof args.sheet !== 'string' || !args.sheet.trim() || args.sheet.length > 31)) throw new Error('请选择有效的工作表名称。')
+  if (textView) {
+    const result = ext === 'xlsx'
+      ? await readQuoteCells(await parts(), args.sheet as string, selectedRange(args.range ?? 'A1:H25'))
+      : await readQuoteParagraphs(await parts(), integer(args.startParagraph ?? 1, '起始段落', 1000000), integer(args.paragraphCount ?? 30, '读取段落数', 80), integer(args.startColumn ?? 1, '起始字符列', 10 * 1024 * 1024))
+    return { description: JSON.stringify({ file: file.name, ...result }) }
+  }
+  if (!access.render) throw new Error('当前宿主未加载 Office 渲染服务。可提供相应页截图，或另存为 CSV/TSV 后读取。')
+  const selection = ext === 'xlsx' ? { sheet: args.sheet as string, range: selectedRange(args.range ?? 'A1:H25') } : { pages: [integer(args.page ?? 1, '页码', 1000000)] }
+  const request: QuoteOfficeRequest = { extension: ext, source: {
+    key: JSON.stringify(['ihome-quote-source', file.attachmentId, ext]), version: file.attachmentId, bytes: file.bytes,
+    async read(readSignal, maxBytes) { return { bytes: await readExact(access, file, readSignal, Math.min(maxBytes, maxDocument)), version: file.attachmentId } },
+  }, ...selection, dpi: 120, maxImages: ext === 'xlsx' ? 4 : 1, maxPixels: 5_000_000, maxDimension: 3000, maxBytes: 5_000_000 }
+  let result: QuoteOfficeResult
+  try { result = await access.render(request, signal) }
+  catch (error) {
+    signal.throwIfAborted()
+    throw new Error('无法渲染指定页或区域，请核对页码、工作表名并缩小范围。' + (error instanceof Error ? ' ' + error.message : ''))
+  }
+  signal.throwIfAborted()
+  const size = result.images.reduce((total, img) => total + img.png.byteLength, 0)
+  if (!result.images.length || result.images.length > request.maxImages || size > request.maxBytes) throw new Error('渲染未返回有效大小的页面，请缩小范围。')
+  const images: DesignImageRef[] = []
+  for (const [i, image] of result.images.entries()) {
+    if (!image.png.byteLength || image.width <= 0 || image.height <= 0 || image.width > request.maxDimension || image.height > request.maxDimension || image.width * image.height > request.maxPixels) throw new Error('渲染图片尺寸无效，请缩小范围。')
+    images.push(await access.saveImage({ data: image.png, mediaType: 'image/png', name: file.name + '-' + (i + 1) + '.png' }))
+    signal.throwIfAborted()
+  }
+  return { description: JSON.stringify({ file: file.name, pageCount: result.pageCount, dpi: result.dpi, missingFonts: result.missingFonts,
+    locations: result.images.map(({page,sheet,range}) => ({page,sheet,range})) }), images }
 }

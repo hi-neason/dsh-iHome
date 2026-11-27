@@ -1,4 +1,6 @@
 import type { ArchiveHostContext } from './archive-host'
+import { registerQuoteDocuments } from './quote-document-host'
+import { registerQuoteSources, type QuoteSourceHost } from './quote-source-host'
 import { registerQuoteTools } from './quote-tools'
 import { changeQuoteBoard, parseQuoteBoard, QuoteConflict, type QuoteBoard } from './quote-model'
 
@@ -15,7 +17,7 @@ export interface QuoteHostContext extends Pick<ArchiveHostContext, 'effect' | 'c
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'cache-control': 'no-store' } })
 
-export async function mountQuotes(ctx: QuoteHostContext): Promise<void> {
+export async function mountQuotes(ctx: QuoteHostContext & QuoteSourceHost): Promise<void> {
   await ctx.effect(async () => {
     const domain = await ctx.storageDomain.open({ name: 'ihome_quotes', version: 1,
       tables: { boards: { valueSchema: { parse: parseQuoteBoard } } } })
@@ -32,6 +34,7 @@ export async function mountQuotes(ctx: QuoteHostContext): Promise<void> {
         signal.throwIfAborted()
         return changeQuoteBoard(current, change)
       })
+      disposers.push(registerQuoteDocuments(ctx, table, read))
       disposers.push(ctx.connection.fetch.register({ path: '/api/ihome/quotes', methods: ['GET', 'POST'], requestBody: 'buffered',
         async fetch(request) {
           try {
@@ -50,6 +53,7 @@ export async function mountQuotes(ctx: QuoteHostContext): Promise<void> {
         },
       }))
       registerQuoteTools(ctx, read, save, disposers)
+      disposers.push(registerQuoteSources(ctx, read))
       return async () => { for (const dispose of disposers.reverse()) await dispose(); await domain.close() }
     } catch (error) {
       for (const dispose of disposers.reverse()) await dispose()

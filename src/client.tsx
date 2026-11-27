@@ -15,6 +15,7 @@ type PanelSlot =
   | { name: 'settings.section', id: string, order: number, label: string }
   | { name: 'settings.section.icon', id: string }
 interface ClientContext extends NavigationContext {
+  sidebarRight: NavigationContext['sidebarRight'] & { openResourceIn(sessionId: string, address: string, options: { destination: 'sidebar' }): void }
   sessions: NavigationContext['sessions'] & ExpertSlashContext['sessions']
   inputTriggers: ExpertSlashContext['inputTriggers']
   locale: ExpertSlashContext['locale']
@@ -76,7 +77,8 @@ export function apply(ctx: ClientContext): void {
       void navigation.openModule(id, previousId).catch(error => setError(String(error.message ?? error)))
     }
     return <>{error && <p role="alert">{error}</p>}
-      <ModuleWorkbench key={workbenchKey} id={id} sharedTeam={sharedTeam} archiveService={archiveService} taskService={taskService}
+      <ModuleWorkbench key={workbenchKey} id={id} sharedTeam={sharedTeam} sessionId={sessionId}
+        openDocument={address => ctx.sidebarRight.openResourceIn(sessionId, address, { destination: 'sidebar' })} archiveService={archiveService} taskService={taskService}
         historyLinks={expert && previous.length ? [
           ...(previous.includes(sessionId) ? [{ label: '进入 iHome专家团', open: () => switchSession() }] : []),
           ...previous.filter(previousId => previousId !== sessionId).map((previousId, index) => ({

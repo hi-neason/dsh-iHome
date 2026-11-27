@@ -1,3 +1,4 @@
+import { parseQuoteDocument, documentVersionKey, type QuoteDocument } from './quote-documents.ts'
 import { assertUniqueScopeKeys, parseQuoteScopeItem, type QuoteScopeItem } from './quote-scope.ts'
 import { freezeDecision, parseDecision, type QuoteDecision } from './quote-decision.ts'
 import { assertUniqueQuoteReviews, parseQuoteReview, type QuoteReview } from './quote-review.ts'
@@ -19,6 +20,7 @@ export interface QuoteVendor {
 
 export interface QuoteBoard {
   revision: number
+  documents: QuoteDocument[]
   vendors: QuoteVendor[]
   quotes: QuoteVersion[]
   references: QuoteReference[]
@@ -62,6 +64,9 @@ export function parseQuoteBoard(value: unknown): QuoteBoard {
   const vendors = records(row.vendors, parseVendor)
   const quotes = records(row.quotes === undefined ? [] : row.quotes, parseQuoteVersion)
   const vendorIds = new Set(vendors.map(vendor => vendor.id))
+  const documents = records(row.documents === undefined ? [] : row.documents, parseQuoteDocument)
+  if (documents.some(doc => !vendorIds.has(doc.vendorId)) || new Set(documents.map(documentVersionKey)).size !== documents.length)
+    throw new Error('公司资料所属团队不存在或同名资料版本重复。')
   const versions = new Set<string>()
   for (const quote of quotes) {
     if (!vendorIds.has(quote.vendorId)) throw new Error('报价关联的团队不存在。')
@@ -77,7 +82,7 @@ export function parseQuoteBoard(value: unknown): QuoteBoard {
   assertUniqueScopeKeys(scopeItems)
   const decisions = records(row.decisions === undefined ? [] : row.decisions, parseDecision)
   if (decisions.some(d => d.comparedQuoteIds.some(id => !quoteIds.has(id)))) throw new Error('选商决定关联的报价版本不存在。')
-  return { revision: row.revision, vendors, quotes, reviews, decisions, scopeItems, references: records(row.references === undefined ? [] : row.references, parseQuoteReference) }
+  return { revision: row.revision, documents, vendors, quotes, reviews, decisions, scopeItems, references: records(row.references === undefined ? [] : row.references, parseQuoteReference) }
 }
 
 export const quoteCollections = ['vendors', 'quotes', 'references', 'reviews', 'decisions', 'scopeItems'] as const

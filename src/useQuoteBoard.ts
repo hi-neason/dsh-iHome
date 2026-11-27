@@ -91,5 +91,5 @@ export function useQuoteBoard() {
     }
   }
 
-  return { containerRef, board, error, notice, setNotice, save, reload: () => refresh(true) }
+  return { containerRef, board, error, notice, setNotice, save, acceptBoard: accept, reload: () => refresh(true) }
 }

@@ -4,7 +4,7 @@ import { mountIHomeWorkspace, type WorkspaceHostContext } from './ihome-workspac
 import { mountDesignMedia, type MediaHost } from './design-media-host'
 import { mountDesignTools, type DesignToolsContext } from './design-tools'
 import { mountDesigns, type DesignHostContext } from './design-host'
-import { mountQuoteSources, type QuoteSourceHost } from './quote-source-host'
+import type { QuoteSourceHost } from './quote-source-host'
 import { mountQuotes, type QuoteHostContext } from './quote-host'
 import { mountTasks, type TaskHostContext } from './task-host'
 import { mountAgentSettings, type AgentSettingsHostContext } from './agent-settings-host'
@@ -18,7 +18,6 @@ export async function apply(ctx: QuoteSourceHost & QuoteHostContext & ArchiveHos
   await mountArchive(ctx)
   await mountTasks(ctx)
   await mountQuotes(ctx)
-  mountQuoteSources(ctx)
   await mountDesigns(ctx)
   await mountDesignMedia(ctx)
   await mountDesignTools(ctx)
