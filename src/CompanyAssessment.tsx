@@ -7,7 +7,11 @@ import { quoteVersions } from './quote-analysis'
 
 export function initialSelection(board: QuoteBoard, vendorId: string): AssessmentSelection {
   const documents = companyDocumentSeries(board, vendorId)
-  return { vendorId, documentIds: documents.map(group => group[0].id), quoteId: quoteVersions(board, vendorId)[0]?.id ?? null,
+  const documentIds = documents.flatMap(group => {
+    const latest = group.find(doc => !doc.inactive)
+    return latest ? [latest.id] : []
+  })
+  return { vendorId, documentIds, quoteId: quoteVersions(board, vendorId)[0]?.id ?? null,
     researchId: board.research.filter(r => r.vendorId === vendorId).at(-1)?.id ?? null }
 }
 
@@ -21,7 +25,7 @@ export function EvidencePicker({ board, selection, change }: {
     {docs.length ? <fieldset><legend>参与审核的原件</legend>{docs.map(doc => <label key={doc.id} style={{ display: 'flex', alignItems: 'baseline' }}>
       <input type="checkbox" checked={selection.documentIds.includes(doc.id)} onChange={event => change({ ...selection,
         documentIds: event.target.checked ? [...selection.documentIds, doc.id] : selection.documentIds.filter(id => id !== doc.id) })}/>
-      <span>{quoteDocumentKinds[doc.kind]} · {doc.title} · {doc.version}<br/><small>{doc.file.name}</small></span></label>)}</fieldset> :
+      <span>{quoteDocumentKinds[doc.kind]} · {doc.title} · {doc.version}{doc.inactive && '（已停用）'}<br/><small>{doc.file.name}</small></span></label>)}</fieldset> :
       <p>尚无归档原件，可先审核已有记录并列出需向公司补要的资料。</p>}
     <label>用于复算的报价版本<select value={selection.quoteId ?? ''} onChange={e => change({ ...selection, quoteId: e.target.value || null })}>
       <option value="">不使用结构化报价</option>{quotes.map(q => <option key={q.id} value={q.id}>{q.version} · {q.date}</option>)}</select></label>

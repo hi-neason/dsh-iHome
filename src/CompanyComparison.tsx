@@ -7,12 +7,13 @@ import { AssessmentHistory, AssessmentRequest, EvidencePicker, initialSelection 
 
 export function CompanyComparison({ board, onAsk }: { board: QuoteBoard, onAsk: (prompt: string) => void }) {
   const [selections, setSelections] = useState<AssessmentSelection[]>([])
-  const selected = selections.filter(s => board.vendors.some(v => v.id === s.vendorId))
+  const candidates = board.vendors.filter(vendor => !vendor.withdrawn)
+  const selected = selections.filter(s => candidates.some(v => v.id === s.vendorId))
   // Explicitly omit unselected vendors. The general quote screen defaults to each vendor's latest version.
   const quoteIds = Object.fromEntries(board.vendors.map(v => [v.id, selected.find(s => s.vendorId === v.id)?.quoteId ?? '']))
   const { quotes, comparableCount, subtotals } = compareQuotes(board, quoteIds)
   return <section><h2>公司对比</h2><p>选择两家或更多公司，再核对各自参与比较的资料版本。</p>
-    {board.vendors.map(vendor => {
+    {candidates.map(vendor => {
       const selection = selected.find(s => s.vendorId === vendor.id)
       const update = (next: AssessmentSelection) => setSelections(values => values.map(s => s.vendorId === vendor.id ? next : s))
       return <article key={vendor.id}><label style={{ display: 'flex', alignItems: 'baseline' }}>
@@ -24,7 +25,7 @@ export function CompanyComparison({ board, onAsk }: { board: QuoteBoard, onAsk: 
         {selection && <details><summary>选择资料版本（{selection.documentIds.length} 份原件）</summary>
           <EvidencePicker board={board} selection={selection} change={update}/></details>}</article>
     })}
-    {selected.length >= 2 && <><h3>本次对比范围</h3><div style={{ overflowX: 'auto' }}><table>
+    {selected.length >= 2 && <><h3>本次对比范围</h3><div style={{ overflowX: 'auto' }} tabIndex={0} role="region" aria-label="公司对比表"><table style={{ minWidth: 600 }}>
       <thead><tr><th>公司</th><th>承包范围</th><th>资料版本</th><th>原报总额</th><th>共同可比分项</th><th>网上评价</th></tr></thead>
       <tbody>{selected.map(s => {
         const v = board.vendors.find(v => v.id === s.vendorId)!

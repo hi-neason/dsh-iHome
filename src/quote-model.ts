@@ -10,6 +10,7 @@ import { parseQuoteVersion, type QuoteVersion } from './quote-version.ts'
 export type { QuoteVersion, QuoteLine } from './quote-version.ts'
 
 export interface QuoteVendor {
+  withdrawn?: boolean
   id: string
   name: string
   city: string
@@ -46,7 +47,9 @@ export function quoteText(value: unknown, label: string, required = false, max =
 
 export function parseVendor(value: unknown): QuoteVendor {
   const row = quoteObject(value)
+  if (row.withdrawn !== undefined && typeof row.withdrawn !== 'boolean') throw new Error('公司候选状态无效。')
   return {
+    ...(row.withdrawn ? { withdrawn: true } : {}),
     id: quoteText(row.id, '团队编号', true, 120), name: quoteText(row.name, '团队名称', true, 160),
     city: quoteText(row.city ?? '', '城市', false, 100), contact: quoteText(row.contact ?? '', '联系方式'),
     scope: quoteText(row.scope ?? '', '承包范围'), credentials: quoteText(row.credentials ?? '', '资质核验'),
@@ -103,6 +106,9 @@ export function changeQuoteBoard(board: QuoteBoard, value: unknown): QuoteBoard 
     throw new Error('请指定记录类型和读取时的档案版本。')
   const supplied = quoteObject(raw.record)
   let record = supplied
+  // Older clients send complete vendor profiles without a candidate status.
+  if (collection === 'vendors' && !Object.hasOwn(supplied, 'withdrawn') && board.vendors.find(v => v.id === supplied.id)?.withdrawn)
+    record = { ...supplied, withdrawn: true }
   if (collection === 'decisions') record = { ...freezeDecision(board, supplied) }
   if (collection === 'assessments') record = { ...freezeAssessment(board, supplied) }
   const previous = board[collection].find(item => item.id === record.id)

@@ -3,7 +3,7 @@ import type { QuoteFileRef } from './quote-source-tool'
 export const quoteDocumentKinds = { design: '设计图', quote: '报价单', contract: '合同', other: '其他资料' } as const
 export type QuoteDocumentKind = keyof typeof quoteDocumentKinds
 export interface QuoteDocumentMeta { id: string, vendorId: string, kind: QuoteDocumentKind, title: string, version: string }
-export interface QuoteDocument extends QuoteDocumentMeta { uploadedAt: string, file: QuoteFileRef }
+export interface QuoteDocument extends QuoteDocumentMeta { uploadedAt: string, file: QuoteFileRef, inactive?: boolean }
 export const maxQuoteDocumentBytes = 24 * 1024 * 1024
 
 function text(value: unknown, name: string, max: number): string {
@@ -24,7 +24,8 @@ export function parseQuoteDocument(value: unknown): QuoteDocument {
   if (/[/\\]/.test(name) || name === '.' || name === '..') throw new Error('原件文件名无效。')
   const uploadedAt = text(raw.uploadedAt, '上传时间', 32)
   if (!Number.isFinite(Date.parse(uploadedAt)) || new Date(uploadedAt).toISOString() !== uploadedAt) throw new Error('资料上传时间无效。')
-  return { ...parseQuoteDocumentMeta(raw), uploadedAt, file: { attachmentId:file.attachmentId, name, bytes:file.bytes } }
+  if (raw.inactive !== undefined && typeof raw.inactive !== 'boolean') throw new Error('原件状态无效。')
+  return { ...parseQuoteDocumentMeta(raw), ...(raw.inactive ? { inactive: true } : {}), uploadedAt, file: { attachmentId:file.attachmentId, name, bytes:file.bytes } }
 }
 export function documentVersionKey(document: QuoteDocumentMeta) {
   return JSON.stringify([document.vendorId, document.kind, document.title, document.version])

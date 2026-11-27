@@ -42,13 +42,20 @@ export function CompanyDirectory({ board, save, open }: {
 }) {
   const [adding, setAdding] = useState(false)
   const [query, setQuery] = useState('')
+  const [showWithdrawn, setShowWithdrawn] = useState(false)
+  const withdrawn = board.vendors.filter(row => row.withdrawn).length
   const search = query.trim().toLocaleLowerCase()
-  const companies = board.vendors.filter(row => [row.name, row.city, row.contact].some(value => value.toLocaleLowerCase().includes(search)))
+  const companies = board.vendors.filter(row => Boolean(row.withdrawn) === showWithdrawn && [row.name, row.city, row.contact].some(value => value.toLocaleLowerCase().includes(search)))
   return <section aria-label="装修公司清单">
     <header className="ih-company-heading"><h2>装修公司</h2>
       {!adding && <button className="ih-company-primary" onClick={() => setAdding(true)}>添加公司</button>}</header>
     {adding && <ProfileEditor close={() => setAdding(false)} save={async record => { await save(record); open(record.id) }}/>}
     {!board.vendors.length && !adding && <p className="ih-company-empty">还没有候选公司。添加后，可以按公司整理设计图、报价单和合同。</p>}
+    {(withdrawn > 0 || showWithdrawn) && <nav aria-label="公司候选状态">
+      <button type="button" aria-pressed={!showWithdrawn} onClick={() => setShowWithdrawn(false)}>候选公司（{board.vendors.length - withdrawn}）</button>
+      <button type="button" aria-pressed={showWithdrawn} onClick={() => setShowWithdrawn(true)}>已退出（{withdrawn}）</button>
+    </nav>}
+    {!search && board.vendors.length > 0 && !companies.length && <p>{showWithdrawn ? '没有已退出的公司。' : '当前没有在选公司。'}</p>}
     {(board.vendors.length > 1 || query) && <label className="ih-company-search">查找公司
       <input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="公司名称、城市或联系人"/></label>}
     {search && !companies.length && <p>没有匹配的公司。</p>}
@@ -67,10 +74,19 @@ export function CompanyDirectory({ board, save, open }: {
 
 export function CompanyProfile({ company, save }: { company: QuoteVendor, save: (row: QuoteVendor) => Promise<void> }) {
   const [editing, setEditing] = useState(false)
+  const [savingStatus, setSavingStatus] = useState(false)
+  async function changeStatus() {
+    setSavingStatus(true)
+    try { await save({ ...company, withdrawn: !company.withdrawn }) }
+    catch { /* The workbench displays save errors. */ }
+    finally { setSavingStatus(false) }
+  }
   return <section aria-label="公司基本信息">
     <header className="ih-company-heading"><div><h2>{company.name}</h2>
       {(company.city || company.scope) && <p>{[company.city,company.scope].filter(Boolean).join(' · ')}</p>}</div>
-      {!editing && <button type="button" onClick={() => setEditing(true)}>编辑公司</button>}</header>
+      {!editing && <div className="ih-quote-actions"><button type="button" disabled={savingStatus} onClick={() => setEditing(true)}>编辑公司</button>
+        <button type="button" disabled={savingStatus} onClick={() => void changeStatus()}>{company.withdrawn ? '恢复候选' : '退出候选'}</button></div>}</header>
+    {company.withdrawn && <p className="ih-company-count">已退出候选，历史资料和报告可继续查看。</p>}
     {editing ? <ProfileEditor initial={company} save={save} close={() => setEditing(false)}/> :
       fields.some(([key]) => !['name','city','scope'].includes(key) && company[key]) &&
       <details className="ih-company-summary"><summary>联系与考察记录</summary><dl>

@@ -10,7 +10,7 @@ import { quoteStatusLabels } from './quote-version.ts'
 const output: ArchiveTool['output'] = { schema: {}, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] }
 const recordTypes: Record<QuoteCollection, string> = { assessments: '材料审核报告', research: '网上评价调研', vendors: '候选团队', scopeItems: '业主询价底稿', quotes: '报价版本', references: '参照单价', reviews: '商家澄清', decisions: '选商决定' }
 const fieldNames: Record<string, string> = {
-  company: '调研时的公司名称', branch: '门店或区域', summary: '发现', limitations: '局限', questions: '待问问题', sources: '原文依据',
+  withdrawn: '已退出候选', company: '调研时的公司名称', branch: '门店或区域', summary: '发现', limitations: '局限', questions: '待问问题', sources: '原文依据',
   id: '记录编号', name: '团队名称', city: '城市', contact: '联系方式', scope: '承包范围', credentials: '资质核验',
   visit: '考察记录', source: '出处', vendorId: '团队', version: '版本名称', date: '日期', statedTotal: '原报总额（元）',
   lines: '报价分项', key: '对齐项', label: '原项目名称', unit: '计量单位', quantity: '工程量', unitPrice: '单价（元）',

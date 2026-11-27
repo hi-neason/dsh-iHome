@@ -54,7 +54,7 @@ function resolveSelection(board: QuoteBoard, selection: AssessmentSelection) {
   const documents = documentIds.map(id => {
     const doc = board.documents.find(item => item.id === id && item.vendorId === vendorId)
     if (!doc) throw new Error('所选原件版本不属于这家公司。')
-    return { id: doc.id, title: doc.title, version: doc.version, kind: doc.kind, name: doc.file.name }
+    return { id: doc.id, title: doc.title, version: doc.version, kind: doc.kind, name: doc.file.name, inactive: doc.inactive === true }
   })
   const quote = board.quotes.find(item => item.id === quoteId && item.vendorId === vendorId)
   const research = board.research.find(item => item.id === researchId && item.vendorId === vendorId)
@@ -141,7 +141,7 @@ export function freezeAssessment(board: QuoteBoard, value: unknown): CompanyAsse
     lines.push(name)
     add('vendor', vendor.id, name)
     for (const doc of documents) {
-      const label = name + ' / ' + doc.title + ' · ' + doc.version + ' · ' + doc.name
+      const label = name + ' / ' + doc.title + ' · ' + doc.version + ' · ' + doc.name + (doc.inactive ? '（当时已停用）' : '')
       lines.push('  原件　' + label); add('document', doc.id, label)
     }
     if (quote) {

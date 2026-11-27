@@ -17,7 +17,7 @@ description: 按业主提供的商家资料、报价和合同核查证据、核�
 
 ## 审一家装修公司的材料
 
-收到 assessmentScope 后，将原数组交给 ihome_read_quotes。保留返回的 basisRevision 及 selections。对选定原件实际调用 ihome_read_quote_source({vendorId,documentId,...})，按 next、分页或工作表读到与问题相关的正文。列明每份原件已读和未读位置。图片模糊、格式不支持或只取得目录时记录缺口。已登记报价可用 quoteId 复核金额、参照条件和澄清。
+收到 assessmentScope 后，将原数组交给 ihome_read_quotes。保留返回的 basisRevision 及 selections。没有指定版本时，默认使用在选公司和仍在使用的资料版本；业主指定回顾历史时可查退出的公司和停用的原件，并注明归档状态。对选定原件实际调用 ihome_read_quote_source({vendorId,documentId,...})，按 next、分页或工作表读到与问题相关的正文。列明每份原件已读和未读位置。图片模糊、格式不支持或只取得目录时记录缺口。已登记报价可用 quoteId 复核金额、参照条件和澄清。
 
 逐项关联图纸要求 → 报价行 → 合同条款。比如图纸要求两道防水时，引用图号与位置，再核对报价遍数及合同替换材料条款。按已选来源评价口碑。单价只有一条他家报价、范围不明或本地样本不匹配时标记价格依据不足。每条发现说明影响与需商家书面确认的问题。
 

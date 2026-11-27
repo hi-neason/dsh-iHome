@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { downloadQuoteDocument, quoteDocumentPreviewAddress, uploadQuoteDocument } from './quote-document-client'
+import { downloadQuoteDocument, quoteDocumentPreviewAddress, setQuoteDocumentInactive, uploadQuoteDocument } from './quote-document-client'
 import { maxQuoteDocumentBytes, quoteDocumentKinds, type QuoteDocument, type QuoteDocumentKind } from './quote-documents'
 import type { QuoteBoard, QuoteVendor } from './quote-model'
 
@@ -80,19 +80,25 @@ function DocumentUpload({ company, versions, acceptBoard, close }: {
 
 interface PreviewProps { sessionId?: string, openDocument?: (address: string) => void }
 
-function DocumentVersion({ doc, sessionId, openDocument }: { doc: QuoteDocument } & PreviewProps) {
+function DocumentVersion({ doc, sessionId, openDocument, revision, acceptBoard }: {
+  doc: QuoteDocument, revision: number, acceptBoard: (next: QuoteBoard) => void,
+} & PreviewProps) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const request = useRef<AbortController>()
   useEffect(() => () => request.current?.abort(), [])
-  async function read(action: 'open' | 'download') {
+  async function act(action: 'open' | 'download' | 'status') {
     if (request.current) return
     const controller = new AbortController()
     request.current = controller
     setBusy(true)
     setError('')
     try {
-      if (action === 'open' && sessionId && openDocument) {
+      if (action === 'status') {
+        const next = await setQuoteDocumentInactive(doc.vendorId, doc.id, !doc.inactive, revision, controller.signal)
+        controller.signal.throwIfAborted()
+        acceptBoard(next)
+      } else if (action === 'open' && sessionId && openDocument) {
         const address = await quoteDocumentPreviewAddress(doc.vendorId, doc.id, sessionId, controller.signal)
         controller.signal.throwIfAborted()
         openDocument(address)
@@ -109,7 +115,7 @@ function DocumentVersion({ doc, sessionId, openDocument }: { doc: QuoteDocument 
         window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       }
     } catch (cause) {
-      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : '原件读取失败。')
+      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : '原件操作失败。')
     } finally {
       request.current = undefined
       if (!controller.signal.aborted) setBusy(false)
@@ -119,8 +125,9 @@ function DocumentVersion({ doc, sessionId, openDocument }: { doc: QuoteDocument 
   const size = doc.file.bytes < 1024 ? doc.file.bytes + ' B' : Math.ceil(doc.file.bytes / 1024) + ' KB'
   return <div className="ih-company-version"><strong>{doc.version}</strong><span>{doc.file.name}</span>
     <small>{uploaded} · {size}</small>
-    <div className="ih-quote-actions">{sessionId && openDocument && <button type="button" disabled={busy} onClick={() => void read('open')}>打开原件</button>}
-      <button type="button" disabled={busy} onClick={() => void read('download')}>下载原件</button></div>
+    <div className="ih-quote-actions">{sessionId && openDocument && <button type="button" disabled={busy} onClick={() => void act('open')}>打开原件</button>}
+      <button type="button" disabled={busy} onClick={() => void act('download')}>下载原件</button>
+      <button type="button" disabled={busy} onClick={() => void act('status')}>{doc.inactive ? '恢复使用' : '停用此版'}</button></div>
     {error && <p role="alert">{error}</p>}
   </div>
 }
@@ -131,23 +138,34 @@ export function CompanyDocuments({ board, company, acceptBoard, sessionId, openD
   const [upload, setUpload] = useState<QuoteDocument[] | null>(null)
   const [filter, setFilter] = useState<QuoteDocumentKind | ''>('')
   const groups = companyDocumentSeries(board, company.id)
-  const visible = groups.filter(group => !filter || group[0].kind === filter)
+  const [showInactive, setShowInactive] = useState(false)
+  const inactive = groups.flat().filter(doc => doc.inactive).length
+  const categorized = groups.filter(group => !filter || group[0].kind === filter)
+  const visible = categorized.flatMap(allVersions => {
+    const versions = allVersions.filter(doc => Boolean(doc.inactive) === showInactive)
+    return versions.length ? [{ versions, allVersions }] : []
+  })
+  const actions = { sessionId, openDocument, revision: board.revision, acceptBoard }
   return <section aria-label="这家公司的资料"><header className="ih-company-heading"><h3>公司资料</h3>
     {!upload && <button type="button" onClick={() => setUpload([])}>上传资料</button>}</header>
-    {upload && <DocumentUpload company={company} versions={upload} acceptBoard={next => { acceptBoard(next); setFilter('') }} close={() => setUpload(null)}/>}
+    {upload && <DocumentUpload company={company} versions={upload} acceptBoard={next => { acceptBoard(next); setFilter(''); setShowInactive(false) }} close={() => setUpload(null)}/>}
+    {(inactive > 0 || showInactive) && <nav aria-label="资料使用状态">
+      <button type="button" aria-pressed={!showInactive} onClick={() => setShowInactive(false)}>使用中</button>
+      <button type="button" aria-pressed={showInactive} onClick={() => setShowInactive(true)}>已停用（{inactive}）</button>
+    </nav>}
     {!!groups.length && <label className="ih-company-filter">筛选资料<select value={filter} onChange={e => setFilter(e.target.value as QuoteDocumentKind | '')}>
       <option value="">全部资料</option>
       {(Object.entries(quoteDocumentKinds) as [QuoteDocumentKind,string][]).map(([id,label]) => <option key={id} value={id}>{label}</option>)}
     </select></label>}
-    {!visible.length && !upload && <p className="ih-company-empty">{filter ? '这个分类还没有资料。' : '还没有上传这家公司的原件。'}</p>}
-    {visible.map(versions => {
+    {!visible.length && !upload && <p className="ih-company-empty">{!groups.length ? '还没有上传这家公司的原件。' : showInactive ? '没有符合条件的已停用资料。' : filter ? '这个分类还没有资料。' : '当前没有使用中的原件。'}</p>}
+    {visible.map(({ versions, allVersions }) => {
       const latest = versions[0]
       return <article className="ih-company-document" key={JSON.stringify([latest.kind,latest.title])}>
         <header><div><small>{quoteDocumentKinds[latest.kind]}</small><h4>{latest.title}</h4></div>
-          <button type="button" disabled={!!upload} onClick={() => setUpload(versions)}>上传新版本</button></header>
-        <DocumentVersion doc={latest} sessionId={sessionId} openDocument={openDocument}/>
+          <button type="button" disabled={!!upload} onClick={() => setUpload(allVersions)}>上传新版本</button></header>
+        <DocumentVersion key={latest.id} doc={latest} {...actions}/>
         {versions.length > 1 && <details><summary>历史版本（{versions.length - 1}）</summary>
-          {versions.slice(1).map(doc => <DocumentVersion key={doc.id} doc={doc} sessionId={sessionId} openDocument={openDocument}/>)}
+          {versions.slice(1).map(doc => <DocumentVersion key={doc.id} doc={doc} {...actions}/>)}
         </details>}
       </article>
     })}

@@ -100,3 +100,26 @@ test('浏览器使用认证桥传输原件，返回编码后的当前会话资�
     'dsh-resource://file/session/session%2F1//'+encodeURIComponent('原 件')+'/'+encodeURIComponent(file.name))
   await assert.rejects(quoteDocumentPreviewAddress('b','original','session'),{status:404})
 })
+
+test('停用与恢复一份原件保留同一版本、原始字节及其他公司的资料', async t => {
+  const f = await fixture()
+  t.after(() => f.close())
+  const old = (await (await f.request(meta, 'POST', '保留原件')).json()).documents[0]
+  await f.request({ ...meta, vendorId: 'b', id: 'second' }, 'POST', '另一家公司')
+  const revision = f.state.board.revision
+  const change = (vendorId, inactive, expectedRevision) => f.request({ vendorId, id: old.id }, 'PATCH', JSON.stringify({ expectedRevision, inactive }))
+  assert.equal((await change('b', true, revision)).status, 400)
+  assert.equal((await change('a', 'yes', revision)).status, 400)
+  assert.equal((await change('a', true, revision - 1)).status, 409)
+  const inactive = await (await change('a', true, revision)).json()
+  assert.deepEqual(inactive.documents[0], { ...old, inactive: true })
+  assert.equal(inactive.documents[1].inactive, undefined)
+  assert.equal((await (await change('a', true, revision)).json()).revision, revision + 1)
+  f.state.board = parseQuoteBoard(JSON.parse(JSON.stringify(inactive)))
+  assert.equal(await (await f.request({ vendorId: 'a', id: old.id })).text(), '保留原件')
+  assert.equal(JSON.parse((await f.read({ vendorId: 'a', documentId: old.id })).description).lines[0].text, '保留原件')
+  assert.equal((await change('a', false, revision)).status, 409)
+  const restored = await (await change('a', false, revision + 1)).json()
+  assert.deepEqual(restored.documents[0], old)
+  assert.equal(restored.revision, revision + 2)
+})

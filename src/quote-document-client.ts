@@ -7,6 +7,12 @@ export async function uploadQuoteDocument(meta: QuoteDocumentMeta, file: File, s
   const response = await requestIHome('quote-documents?' + query, { method:'POST', body:file, headers:{ 'content-type':'application/octet-stream' }, signal })
   return parseQuoteBoard(await response.json())
 }
+export async function setQuoteDocumentInactive(vendorId: string, id: string, inactive: boolean, expectedRevision: number, signal?: AbortSignal): Promise<QuoteBoard> {
+  const response = await requestIHome('quote-documents?' + new URLSearchParams({ vendorId, id }), {
+    method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ expectedRevision, inactive }), signal,
+  })
+  return parseQuoteBoard(await response.json())
+}
 export async function downloadQuoteDocument(vendorId: string, id: string, signal?: AbortSignal): Promise<Blob> {
   return (await requestIHome('quote-documents?' + new URLSearchParams({ vendorId, id }), { signal })).blob()
 }

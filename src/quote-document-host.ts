@@ -30,11 +30,26 @@ function checkUpload(board: QuoteBoard, meta: QuoteDocumentMeta) {
   }
 }
 export function registerQuoteDocuments(ctx: DocumentHost, table: QuoteTable, read: () => QuoteBoard) {
-  return ctx.connection.fetch.register({ path:'/api/ihome/quote-documents', methods:['GET','POST'], requestBody:'buffered',
+  return ctx.connection.fetch.register({ path:'/api/ihome/quote-documents', methods:['GET','POST','PATCH'], requestBody:'buffered',
     async fetch(request) {
       try {
         const { signal } = request, params = new URL(request.url).searchParams
         signal.throwIfAborted()
+        if (request.method === 'PATCH') {
+          const { expectedRevision, inactive } = await request.json()
+          if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || typeof inactive !== 'boolean')
+            throw new Error('请指定资料状态和已读取的档案版本。')
+          const board = await table.update('home', current => {
+            signal.throwIfAborted()
+            const doc = current.documents.find(d => d.id === params.get('id') && d.vendorId === params.get('vendorId'))
+            if (!doc) throw new Error('此公司没有这份资料版本。')
+            if (Boolean(doc.inactive) === inactive) return current
+            if (expectedRevision !== current.revision) throw new QuoteConflict('档案已有更新，请重新载入后再修改资料状态。')
+            const next = parseQuoteDocument({ ...doc, inactive })
+            return { ...current, revision: current.revision + 1, documents: current.documents.map(d => d.id === doc.id ? next : d) }
+          })
+          return json(board)
+        }
         if (request.method === 'POST') {
           const meta = parseQuoteDocumentMeta({ id:params.get('id'), vendorId:params.get('vendorId'), kind:params.get('kind'), title:params.get('title'), version:params.get('version') })
           checkUpload(read(), meta)
