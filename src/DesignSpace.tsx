@@ -34,11 +34,35 @@ export function DesignSpace({ model, floorId, mode, allFloors, loadAssets }: Des
     return () => { active = false; scene.current?.dispose(); scene.current = undefined }
   }, [attempt])
   useEffect(() => { scene.current?.update(model, { floorId, mode, allFloors }, loadAssets) }, [model, floorId, mode, allFloors, loadAssets])
+  // Some DSH windows disallow OS fullscreen. Expand the same canvas inside
+  // the window in that case, keeping its renderer and camera alive.
+  useEffect(() => {
+    const element = stage.current
+    const restore = () => {
+      if (!element?.matches(':popover-open')) element?.removeAttribute('popover')
+    }
+    element?.addEventListener('toggle', restore)
+    return () => element?.removeEventListener('toggle', restore)
+  }, [])
   async function toggleFullscreen() {
-    try {
-      if (document.fullscreenElement === stage.current) await document.exitFullscreen()
-      else await stage.current?.requestFullscreen()
-    } catch { setError('当前窗口无法切换全屏。') }
+    const element = stage.current
+    if (!element) return
+    if (element.hasAttribute('popover')) {
+      element.hidePopover()
+      return
+    }
+    if (document.fullscreenElement === element) {
+      await document.exitFullscreen()
+      return
+    }
+    if (document.fullscreenEnabled) {
+      try { await element.requestFullscreen(); return }
+      catch { /* Fall through to an in-window view. */ }
+    }
+    if (element.isConnected && element.showPopover) {
+      element.popover = 'auto'
+      element.showPopover()
+    }
   }
   return <section className="ih-design-space" aria-label={mode === 'plan' ? '房屋平面模型' : '房屋三维模型'}>
     <style>{css}</style>
@@ -48,7 +72,7 @@ export function DesignSpace({ model, floorId, mode, allFloors, loadAssets }: Des
         <button type="button" aria-label="放大模型" onClick={() => scene.current?.zoom(1.25)}>＋</button>
         <button type="button" aria-label="缩小模型" onClick={() => scene.current?.zoom(.8)}>−</button>
         <button type="button" onClick={() => scene.current?.fit()}>适应画布</button>
-        {document.fullscreenEnabled && <button type="button" onClick={toggleFullscreen}>切换全屏</button>}
+        {(document.fullscreenEnabled || typeof HTMLElement.prototype.showPopover === 'function') && <button type="button" onClick={toggleFullscreen}>切换全屏</button>}
       </div>}
       {!ready && !error && <p className="ih-design-space-status" role="status">正在加载模型…</p>}
       {error && <div className="ih-design-space-status" role="alert"><p>{error}</p><button type="button" onClick={() => setAttempt(value => value + 1)}>重新加载模型</button></div>}

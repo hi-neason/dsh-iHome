@@ -7,5 +7,6 @@
 .ih-design-space-status { position: absolute; inset: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: var(--ih-surface, #fdfdfa); padding: 16px; text-align: center; border-radius: 8px; }
 .ih-design-space-status p { margin: 0; overflow-wrap: anywhere; }
 .ih-design-space-hint { margin: 8px 0 0; color: var(--ih-muted, #5e625f); font-size: 11px; }
-.ih-design-space-stage:fullscreen { border:0; border-radius:0; }
-.ih-design-space-stage:fullscreen > canvas { height:100%; }
+.ih-design-space-stage:popover-open { position:fixed; inset:0; margin:0; padding:0; width:100%; height:100%; box-sizing:border-box; }
+.ih-design-space-stage:is(:fullscreen,:popover-open) { border:0; border-radius:0; }
+.ih-design-space-stage:is(:fullscreen,:popover-open) > canvas { height:100%; }
