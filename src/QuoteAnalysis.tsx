@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { QuoteBoard } from './quote-model'
-import { compareQuotes, quoteStatusLabels, quoteVersions } from './quote-analysis'
+import { compareQuotes, quoteVersions } from './quote-analysis'
+import { quoteStatusLabels } from './quote-version'
 
 const currency = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' })
 const amountText = (amount: number | null) => amount === null ? '未提供' : currency.format(amount)

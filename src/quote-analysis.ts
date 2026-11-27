@@ -1,6 +1,6 @@
 import type { QuoteBoard, QuoteLine, QuoteVersion } from './quote-model.ts'
 
-export const quoteStatusLabels = { included: '已含', excluded: '排除', allowance: '暂估', owner: '业主自购', unknown: '待确认' } as const
+import { quoteStatusLabels } from './quote-version.ts'
 
 export function basisText(value: string) { return value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase() }
 export function unitBasis(value: string) {

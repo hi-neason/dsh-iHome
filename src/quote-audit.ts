@@ -11,11 +11,11 @@ export interface AuditQuestion {
 }
 interface ReferenceCheck { reference: QuoteReference, difference: number | null, reason: string }
 
-function referenceCheck(quote: QuoteVersion, line: QuoteLine, city: string, reference: QuoteReference): ReferenceCheck {
+function referenceCheck(quote: QuoteVersion, line: QuoteLine, city: string, reference: QuoteReference, asOfDate: string): ReferenceCheck {
   const cityKey = (value: string) => basisText(value).replace(/市$/, '')
   const reasons: string[] = []
   if (!city.trim() || cityKey(city) !== cityKey(reference.city)) reasons.push('城市不同或未填')
-  if (!quote.date || reference.date > quote.date) reasons.push('缺少报价日期或采价晚于报价')
+  if (reference.date > asOfDate) reasons.push('采价晚于核查基准日')
   if (!line.spec.trim() || basisText(line.spec) !== basisText(reference.spec)) reasons.push('规格或工艺不同或未填')
   if (!quote.scope.trim() || basisText(quote.scope) !== basisText(reference.scope)) reasons.push('承包口径不同或未填')
   if (!line.unit.trim() || unitBasis(line.unit) !== unitBasis(reference.unit)) reasons.push('计量单位不同或未填')
@@ -24,7 +24,11 @@ function referenceCheck(quote: QuoteVersion, line: QuoteLine, city: string, refe
   return { reference, reason: reasons.join('、'), difference: reasons.length ? null : (quoteCents(line.unitPrice!) - quoteCents(reference.unitPrice)) / 100 }
 }
 
-export function auditQuote(board: QuoteBoard, quoteId: string) {
+export function auditDateToday(now = new Date()) {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+export function auditQuote(board: QuoteBoard, quoteId: string, asOfDate = auditDateToday()) {
   const quote = board.quotes.find(item => item.id === quoteId)
   if (!quote) throw new Error('找不到要核查的报价版本。')
   const vendor = board.vendors.find(item => item.id === quote.vendorId)
@@ -74,7 +78,7 @@ export function auditQuote(board: QuoteBoard, quoteId: string) {
       complete = false
       add(line.label, '范围', `标注${line.status === 'owner' ? '业主自购' : '排除'}，同时列出 ${amount} 元`, '这个金额只是参考，还是计入了原报总额？', source)
     }
-    const checks = (references.get(line.key) ?? []).map(ref => referenceCheck(quote, line, vendor?.city || '', ref))
+    const checks = (references.get(line.key) ?? []).map(ref => referenceCheck(quote, line, vendor?.city || '', ref, asOfDate))
     const matched = checks.filter(check => check.difference !== null)
     if (matched.length && (matched.every(check => check.difference! > 0) || matched.every(check => check.difference! < 0))) {
       const values = matched.map(check => check.reference.unitPrice)

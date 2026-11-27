@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { auditQuote } from './quote-audit'
+import { auditDateToday, auditQuote } from './quote-audit'
 import type { QuoteBoard, QuoteLine } from './quote-model'
 import { parseQuoteReference, type QuoteReference } from './quote-reference'
 
@@ -39,10 +39,12 @@ function ReferenceEditor({ initial, onSave, onClose }: {
 
 export function QuoteAudit({ board, onSaveReference }: { board: QuoteBoard, onSaveReference: (record: QuoteReference) => Promise<void> }) {
   const [selected, setSelected] = useState('')
+  const [historical, setHistorical] = useState(false)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [notice, setNotice] = useState('')
   const quote = board.quotes.find(item => item.id === selected) ?? board.quotes.at(-1)
-  const audit = quote && auditQuote(board, quote.id)
+  const asOfDate = historical && quote?.date ? quote.date : auditDateToday()
+  const audit = quote && auditQuote(board, quote.id, asOfDate)
   const vendor = board.vendors.find(item => item.id === quote?.vendorId)
   const names = new Map(board.vendors.map(item => [item.id,item.name]))
   function newReference(line?: QuoteLine) {
@@ -60,6 +62,7 @@ export function QuoteAudit({ board, onSaveReference }: { board: QuoteBoard, onSa
       <h3>待向商家核实（{audit.questions.length}）</h3>
       {audit.questions.length ? <ul>{audit.questions.map((item,index) => <li key={index}><strong>{item.item}</strong> · {item.evidence}<br/>{item.question}{item.source && <><br/><small>{item.source}</small></>}</li>)}</ul> : <p>当前规则未发现需要澄清的问题。</p>}
       <h3>分项核算与参照单价</h3>
+      <label><input type="checkbox" checked={historical} onChange={event => setHistorical(event.target.checked)}/>仅回看报价日已有的采价样本</label><p>核查基准日 {asOfDate}</p>
       {audit.checkedLines.map(({line, calculated, checks}, index) => <details key={`${quote.id}-${index}`}>
         <summary>{line.label} · {checks.filter(check => check.difference !== null).length} 条可比价格</summary>
         <p>{line.quantity ?? '工程量未填'} {line.unit} × {line.unitPrice === null ? '单价未填' : money.format(line.unitPrice)}，计算合价 {calculated === null ? '待核' : money.format(calculated)}，原列合价 {line.amount === null ? '未列' : money.format(line.amount)}。</p>

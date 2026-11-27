@@ -19,12 +19,13 @@ test('verifies vendor extended amount and original total separately, with tracea
 
 test('uses only comparable unit-price evidence, keeps disqualified samples and the reason', () => {
   const mismatches = [{unit:'项'},{scope:'仅材料'},{spec:'三遍面漆'},{city:'成都'},{date:'2026-09-20'}]
-  const result = auditQuote(make([{...base,amount:30}], [reference,...mismatches.map((extra,i)=>({...reference,id:`b${i}`,...extra})),{...reference,key:'roof'}]),'q')
+  const result = auditQuote(make([{...base,amount:30}], [reference,...mismatches.map((extra,i)=>({...reference,id:`b${i}`,...extra})),{...reference,key:'roof'}]),'q','2026-09-15')
   const checks=result.checkedLines[0].checks
   assert.equal(checks.length,6)
   assert.deepEqual(checks.map(c=>c.difference), [2,null,null,null,null,null])
-  assert.deepEqual(checks.slice(1).map(c=>c.reason.split('不同')[0]), ['计量单位','承包口径','规格或工艺','城市','缺少报价日期或采价晚于报价'])
+  assert.deepEqual(checks.slice(1).map(c=>c.reason.split('不同')[0]), ['计量单位','承包口径','规格或工艺','城市','采价晚于核查基准日'])
   assert.equal(checks[0].reference.source,reference.source)
+  assert.equal(auditQuote(make([base],[{...reference,date:'2026-09-20'}]),'q','2026-09-21').checkedLines[0].checks[0].difference,2)
   assert.equal(result.questions.filter(q=>q.kind==='参照单价').length,1)
   const inside=auditQuote(make([base],[reference,{...reference,id:'r2',unitPrice:12}]),'q')
   assert.equal(inside.questions.filter(q=>q.kind==='参照单价').length,0)
