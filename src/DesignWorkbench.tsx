@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { DesignSpace } from './DesignSpace'
 import { DesignPlan } from './DesignPlan'
 import { ArchiveDialog } from './ArchiveDialog'
 import { loadDesigns, changeDesign } from './design-client'
@@ -37,6 +38,8 @@ export function DesignWorkbench() {
   const [editor, setEditor] = useState<{ kind: 'add' | 'edit', revision: number } | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [undo, setUndo] = useState<{ designId: string, revision: number, model: DesignModel }>()
+  const [view, setView] = useState<'plan' | 'space'>('plan')
+  const [allFloors, setAllFloors] = useState(true)
   const panel = useRef<HTMLElement>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -111,7 +114,17 @@ export function DesignWorkbench() {
       }}>撤销上次编辑</button>
       {document.fullscreenEnabled && <button type="button" onClick={toggleFullscreen}>切换全屏</button>}
     </div>
-    <DesignPlan key={scheme.id} model={model} floorId={floor.id} selectedId={selectedId} onSelect={setSelectedId} onChange={replace} />
+    <div role="group" aria-label="视图" className="ih-design-bar">
+      <button aria-pressed={view === 'plan'} onClick={() => setView('plan')}>平面图</button>
+      <button aria-pressed={view === 'space'} onClick={() => setView('space')}>3D 立体图</button>
+      {view === 'space' && <label><input type="checkbox" checked={allFloors} onChange={e => setAllFloors(e.target.checked)} /> 显示整栋</label>}
+    </div>
+    {view === 'space' ? <DesignSpace key={scheme.id} model={model} floorId={floor.id}
+      allFloors={allFloors} selectedId={selectedId} onSelect={id => {
+        setSelectedId(id)
+        const level = model.floors.find(value => [...value.walls, ...value.openings, ...value.items, ...(value.assets ?? [])].some(element => element.id === id))
+        if (level) setFloorId(level.id)
+      }} /> : <DesignPlan key={scheme.id} model={model} floorId={floor.id} selectedId={selectedId} onSelect={setSelectedId} onChange={replace} />}
     {editor?.revision === state.revision && <FloorEditor error={error} floor={editor.kind === 'edit' ? floor : undefined}
       elevation={Math.max(...model.floors.map(level => level.elevation + level.height))}
       busy={busy} close={() => setEditor(null)} save={async next => {

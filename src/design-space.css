@@ -1,0 +1,9 @@
+.ih-design-space { font-size: 12px; color: var(--ih-ink, #202322); }
+.ih-design-space-stage { position: relative; min-height: 320px; border: 1px solid var(--ih-line, #d8dad5); border-radius: 10px; overflow: hidden; background: radial-gradient(ellipse at 50% 25%, var(--ih-surface, #fdfdfa), var(--ih-soft, #eaece7)); }
+.ih-design-space-stage > canvas { display: block; width: 100%; height: clamp(320px, 55vh, 660px); touch-action: none; }
+.ih-design-space button { border: 1px solid var(--ih-line, #d8dad5); border-radius: 6px; background: var(--ih-surface, #fdfdfa); color: inherit; font: inherit; padding: 7px 10px; cursor: pointer; }
+.ih-design-space button:focus-visible { outline: 2px solid var(--ih-muted, #5e625f); outline-offset: 2px; }
+.ih-design-space-fit { position: absolute; bottom: 10px; right: 10px; }
+.ih-design-space-status { position: absolute; inset: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: var(--ih-surface, #fdfdfa); padding: 16px; text-align: center; border-radius: 8px; }
+.ih-design-space-status p { margin: 0; overflow-wrap: anywhere; }
+.ih-design-space-hint { margin: 8px 0 0; color: var(--ih-muted, #5e625f); font-size: 11px; }
