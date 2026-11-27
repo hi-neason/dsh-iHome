@@ -1,3 +1,4 @@
+import { assessmentBasis, assessmentRecordHint } from './quote-assessment.ts'
 import { quoteDocumentInfo } from './quote-documents.ts'
 import type { ArchiveHostContext, ArchiveTool } from './archive-host'
 import { allowedExpertTools } from './expert-dispatch.ts'
@@ -7,7 +8,7 @@ import { changeQuoteBoard, QuoteConflict, quoteCollections, quoteObject, type Qu
 import { quoteStatusLabels } from './quote-version.ts'
 
 const output: ArchiveTool['output'] = { schema: {}, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] }
-const recordTypes: Record<QuoteCollection, string> = { research: '网上评价调研', vendors: '候选团队', scopeItems: '业主询价底稿', quotes: '报价版本', references: '参照单价', reviews: '商家澄清', decisions: '选商决定' }
+const recordTypes: Record<QuoteCollection, string> = { assessments: '材料审核报告', research: '网上评价调研', vendors: '候选团队', scopeItems: '业主询价底稿', quotes: '报价版本', references: '参照单价', reviews: '商家澄清', decisions: '选商决定' }
 const fieldNames: Record<string, string> = {
   company: '调研时的公司名称', branch: '门店或区域', summary: '发现', limitations: '局限', questions: '待问问题', sources: '原文依据',
   id: '记录编号', name: '团队名称', city: '城市', contact: '联系方式', scope: '承包范围', credentials: '资质核验',
@@ -48,10 +49,16 @@ function describe(record: unknown, board: QuoteBoard): string {
   return lines(quoteObject(record)).join('\n').split('\n').map(line => '    ' + line).join('\n')
 }
 
-const queryHint = '用 quoteId 读取一份完整报价及核查，用 vendorId 查看该团队资料，用 quoteIds 比较不同团队指定版本。'
+const queryHint = '用 assessmentScope 指定审核的公司及材料版本，用 assessmentId 回看冻结报告。用 quoteId 读取一份完整报价及核查，用 vendorId 查看该团队资料，用 quoteIds 比较不同团队指定版本。'
 function readQuotes(board: QuoteBoard, raw: unknown) {
   const query = quoteObject(raw)
-  if (Object.keys(query).some(key => !['quoteId','quoteIds','vendorId','decisionId'].includes(key)) || Object.keys(query).length > 1) throw new Error('每次请选择一种读取条件。')
+  if (Object.keys(query).some(key => !['quoteId','quoteIds','vendorId','decisionId','assessmentScope','assessmentId'].includes(key)) || Object.keys(query).length > 1) throw new Error('每次请选择一种读取条件。')
+  if ('assessmentScope' in query) return assessmentBasis(board, query.assessmentScope)
+  if ('assessmentId' in query) {
+    const assessment = board.assessments.find(item => item.id === query.assessmentId)
+    if (!assessment) throw new Error('指定的审核报告不存在。')
+    return { revision: board.revision, assessment }
+  }
   if ('quoteIds' in query) {
     const ids = query.quoteIds
     if (!Array.isArray(ids) || ids.length < 2 || ids.some(id => typeof id !== 'string')) throw new Error('比价需指定至少两家团队的报价版本编号。')
@@ -86,6 +93,8 @@ function readQuotes(board: QuoteBoard, raw: unknown) {
   const keys = new Set(quotes.flatMap(quote => quote.lines.map(line => line.key)))
   const relevantDecisions = 'vendorId' in query ? decisions.filter(item => item.comparedQuoteIds.some(id => quoteIds.has(id))) : decisions
   return { revision: board.revision, vendors,
+    assessments: board.assessments.filter(a => !('vendorId' in query) || a.selections.some(s => s.vendorId === query.vendorId))
+      .map(a => ({ id: a.id, date: a.date, summary: a.summary, selections: a.selections })),
     research: board.research.filter(r => !('vendorId' in query) || r.vendorId === query.vendorId).map(r => 'vendorId' in query ? r : { id: r.id, vendorId: r.vendorId, date: r.date, company: r.company, branch: r.branch }),
     documents:board.documents.filter(doc => !('vendorId' in query) || doc.vendorId === query.vendorId).map(quoteDocumentInfo), scopeItems: board.scopeItems, quotes: quotes.map(quote => {
     if (!compact && JSON.stringify(quote).length <= 12000) return quote
@@ -104,6 +113,7 @@ const recordDescription = [
   'scopeItems: id,key(与报价分项一致),label,unit,quantity(未知为null),spec,source(图纸或业主确认范围出处)。',
   'references: id,key,city,date(YYYY-MM-DD),source,unit,spec,scope,unitPrice(元)。',
   'reviews: id,quoteId,topic,question,source,answer,answerSource,status(open/answered)；未答复时两个答复字段为空串，已答复须有原文及来源。',
+  assessmentRecordHint,
   'research: id,vendorId,company(档案名),city,branch,date(YYYY-MM-DD),summary,limitations,questions(字符串数组),sources(已打开的原文数组，可空)。每条来源含 title,url,kind(owner/merchant/official/other),identity(matched/uncertain/other-branch),basis(归属依据),author,published,accessed(YYYY-MM-DD),excerpt。复查另存新 id。',
   'decisions: id,quoteId(业主选中的版本),comparedQuoteIds(包含选中项，每家一版),reason(取舍依据)。宿主生成冻结报告。仅在业主已选定版本时提出。',
 ].join('\n')
@@ -121,6 +131,9 @@ export function registerQuoteTools(
   }
   register({ name: 'ihome_read_quotes', description: '读取本机选商档案及 revision。空参数返回团队、报价、样本、澄清和决定，大报价返回目录。' + queryHint + '用 decisionId 读取冻结报告。',
     parameters: { type: 'object', additionalProperties: false, properties: { vendorId: { type: 'string' }, quoteId: { type: 'string' }, decisionId: { type: 'string' },
+      assessmentId: { type: 'string' }, assessmentScope: { type: 'array', minItems: 1, items: { type: 'object', additionalProperties: false,
+        required: ['vendorId', 'documentIds'], properties: { vendorId: { type: 'string' }, documentIds: { type: 'array', items: { type: 'string' } },
+          quoteId: { type: ['string','null'] }, researchId: { type: ['string','null'] } } } },
       quoteIds: { type: 'array', minItems: 2, uniqueItems: true, items: { type: 'string' } } } }, output,
     async execute(raw) { return readQuotes(read(), raw) },
   })
@@ -141,7 +154,8 @@ export function registerQuoteTools(
         const previous = before[collection].find(entry => entry.id === recordId)
         const updated = next[collection].find(entry => entry.id === recordId)!
         const detail = [previous ? '原记录\n\n' + describe(previous, before) + '\n\n修改为' : '新增' + recordTypes[collection],
-          describe('report' in updated ? { id: updated.id, quoteId: updated.quoteId, comparedQuoteIds: updated.comparedQuoteIds, reason: updated.reason } : updated, next)].join('\n\n')
+          'findings' in updated ? updated.report.split('\n').map(line => '    ' + line).join('\n')
+          : describe('comparedQuoteIds' in updated ? { id: updated.id, quoteId: updated.quoteId, comparedQuoteIds: updated.comparedQuoteIds, reason: updated.reason } : updated, next)].join('\n\n')
         const id = 'apply-quote-change'
         const { answers } = await ctx.userQuestions.ask({ agent, signal, questions: [{ id, header: '选商核价',
           question: '接受这项' + recordTypes[collection] + '记录并保存吗？', detail, options: [{ label: '接受' }, { label: '不接受' }] }] })

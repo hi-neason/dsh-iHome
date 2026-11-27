@@ -153,3 +153,31 @@ test('网上评价须确认，按公司回查；同名公司隔离且复查保�
   await f.propose('research', { ...report, id:'r2', sources:[], summary:'本次未取得原文。' })
   assert.deepEqual((await f.read({ vendorId:'v1' })).research.map(r => r.id), ['r1','r2'])
 })
+
+test('公司审核冻结选定版本和引文，拒绝错配、缺依据和过期提案', async () => {
+  const f = fixture()
+  for (const id of ['v1', 'v2']) await f.propose('vendors', { ...firstVendor, id })
+  await f.propose('quotes', quote)
+  const selections = [{ vendorId:'v1', documentIds:[], quoteId:quote.id, researchId:null }]
+  const basis = await f.read({ assessmentScope:selections })
+  assert.equal(basis.companies[0].quote.matchedReferenceCount, 0)
+  assert.equal(basis.basisRevision, 3)
+  const citations = [{ type:'quote', id:quote.id, at:line.source, excerpt:'单价 30 元/㎡' }]
+  const record = { id:'a1', basisRevision:basis.basisRevision, selections, summary:'单价依据不足', findings:[
+    { dimension:'报价', status:'finding', detail:'原报价单价为30元/㎡', citations, question:'' },
+    { dimension:'报价', status:'gap', detail:'暂无同城同条件样本', citations:[], question:'可否提供同口径样本？' },
+  ] }
+  await assert.rejects(f.read({ assessmentScope:[{ ...selections[0], vendorId:'v2' }] }), /不属于/)
+  await assert.rejects(f.propose('assessments', { ...record, findings:[{ ...record.findings[0], citations:[] }] }), /引用/)
+  await assert.rejects(f.propose('assessments', { ...record, findings:[{ ...record.findings[0], citations:[{...citations[0], type:'vendor', id:'v2'}] }] }), /超出/)
+  assert.equal((await f.propose('assessments', record)).status, 'applied')
+  assert.match(f.questions.at(-1).detail, /甲装修[\s\S]*第一张第7行[\s\S]*同城同条件样本/)
+  assert.equal((await f.propose('assessments', record)).status, 'unchanged')
+  assert.equal((await f.propose('assessments', { ...record, id:'stale' })).status, 'conflict')
+  const before = await f.read({ assessmentId:'a1' })
+  await f.propose('vendors', { ...firstVendor, name:'更名公司' })
+  await f.propose('quotes', { ...quote, id:'q2', version:'改版' })
+  assert.deepEqual((await f.read({ assessmentId:'a1' })).assessment, before.assessment)
+  assert.deepEqual((await f.read({ vendorId:'v2' })).assessments, [])
+  assert.match((await f.read({ assessmentId:'a1' })).assessment.report, /甲装修/)
+})

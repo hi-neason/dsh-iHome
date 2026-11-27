@@ -1,3 +1,4 @@
+import { freezeAssessment, parseAssessment, type CompanyAssessment } from './quote-assessment.ts'
 import { parseVendorResearch, type QuoteVendorResearch } from './vendor-research.ts'
 import { parseQuoteDocument, documentVersionKey, type QuoteDocument } from './quote-documents.ts'
 import { assertUniqueScopeKeys, parseQuoteScopeItem, type QuoteScopeItem } from './quote-scope.ts'
@@ -20,6 +21,7 @@ export interface QuoteVendor {
 }
 
 export interface QuoteBoard {
+  assessments: CompanyAssessment[]
   research: QuoteVendorResearch[]
   revision: number
   documents: QuoteDocument[]
@@ -66,6 +68,7 @@ export function parseQuoteBoard(value: unknown): QuoteBoard {
   const vendors = records(row.vendors, parseVendor)
   const quotes = records(row.quotes === undefined ? [] : row.quotes, parseQuoteVersion)
   const vendorIds = new Set(vendors.map(vendor => vendor.id))
+  const assessments = records(row.assessments === undefined ? [] : row.assessments, parseAssessment)
   const research = records(row.research === undefined ? [] : row.research, parseVendorResearch)
   if (research.some(report => !vendorIds.has(report.vendorId))) throw new Error('调研报告关联的公司不存在。')
   const documents = records(row.documents === undefined ? [] : row.documents, parseQuoteDocument)
@@ -86,10 +89,10 @@ export function parseQuoteBoard(value: unknown): QuoteBoard {
   assertUniqueScopeKeys(scopeItems)
   const decisions = records(row.decisions === undefined ? [] : row.decisions, parseDecision)
   if (decisions.some(d => d.comparedQuoteIds.some(id => !quoteIds.has(id)))) throw new Error('选商决定关联的报价版本不存在。')
-  return { revision: row.revision, research, documents, vendors, quotes, reviews, decisions, scopeItems, references: records(row.references === undefined ? [] : row.references, parseQuoteReference) }
+  return { revision: row.revision, assessments, research, documents, vendors, quotes, reviews, decisions, scopeItems, references: records(row.references === undefined ? [] : row.references, parseQuoteReference) }
 }
 
-export const quoteCollections = ['vendors', 'quotes', 'references', 'reviews', 'decisions', 'scopeItems', 'research'] as const
+export const quoteCollections = ['vendors', 'quotes', 'references', 'reviews', 'decisions', 'scopeItems', 'research', 'assessments'] as const
 export type QuoteCollection = typeof quoteCollections[number]
 export class QuoteConflict extends Error {}
 
@@ -99,7 +102,9 @@ export function changeQuoteBoard(board: QuoteBoard, value: unknown): QuoteBoard 
   if (!collection || !Number.isSafeInteger(raw.expectedRevision) || Number(raw.expectedRevision) < 0)
     throw new Error('请指定记录类型和读取时的档案版本。')
   const supplied = quoteObject(raw.record)
-  const record = collection === 'decisions' ? { ...freezeDecision(board, supplied) } : supplied
+  let record = supplied
+  if (collection === 'decisions') record = { ...freezeDecision(board, supplied) }
+  if (collection === 'assessments') record = { ...freezeAssessment(board, supplied) }
   const previous = board[collection].find(item => item.id === record.id)
   const rows = previous ? board[collection].map(item => item.id === record.id ? record : item) : [...board[collection], record]
   const next = parseQuoteBoard({ ...board, [collection]: rows, revision: board.revision + 1 })

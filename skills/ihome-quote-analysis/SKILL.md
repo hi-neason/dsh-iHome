@@ -15,6 +15,14 @@ description: 按业主提供的商家资料、报价和合同核查证据、核�
 
 将可验证的结论、引用、复算过程、待确认问题、建议写入的记录及读取版本返回主 Agent。主 Agent 使用 ihome_propose_quote 展示具体改动，经业主确认后保存。
 
+## 审一家装修公司的材料
+
+收到 assessmentScope 后，将原数组交给 ihome_read_quotes。保留返回的 basisRevision 及 selections。对选定原件实际调用 ihome_read_quote_source({vendorId,documentId,...})，按 next、分页或工作表读到与问题相关的正文。列明每份原件已读和未读位置。图片模糊、格式不支持或只取得目录时记录缺口。已登记报价可用 quoteId 复核金额、参照条件和澄清。
+
+逐项关联图纸要求 → 报价行 → 合同条款。比如图纸要求两道防水时，引用图号与位置，再核对报价遍数及合同替换材料条款。按已选来源评价口碑。单价只有一条他家报价、范围不明或本地样本不匹配时标记价格依据不足。每条发现说明影响与需商家书面确认的问题。
+
+向主会话交付结论及一条 collection=assessments 的 record。包含新 id、basisRevision、原 selections、summary、findings。每条发现包括 dimension（设计/报价/合同/口碑/综合）、status（finding 或 gap）、detail、citations 数组及 question。每个 citation 用 type（document/quote/research/vendor/scope/reference/clarification）、所选依据的原 id、at（实际页码、段落、单元格或网页 URL）和 excerpt（原文或书面数字）。对照两份文件的矛盾要引用两方原文。尚无证据的维度用 gap、空 citations、具体补证问题。报告与业主签约决定分别归档。
+
 ## 向主会话交付可登记的明细
 
 业主要求登记资料时，先读取当前记录，返回 expectedRevision、collection 和单条 record。关联已有记录时使用读取到的编号。补充候选团队资料时返回完整记录，保留原有字段。缺少必填依据时先列出要向业主核实的信息。
