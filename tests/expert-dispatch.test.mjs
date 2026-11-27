@@ -37,9 +37,10 @@ test('durable provider identity selects independent expert permissions and survi
     const restored = { agent: { session: { header: structuredClone(execution.agent.session.header), snapshotEvents: () => structuredClone(execution.events) } } }
     assert.equal(expertRole(restored), role)
     assert.ok(allowedExpertTools(restored).has('ihome_read_archive'))
+    assert.equal(allowedExpertTools(restored).has('ihome_review_design'), role === 'ihome-floorplan-designer')
     assert.equal(allowedExpertTools(restored).has('ihome_read_design'), role === 'ihome-floorplan-designer')
     assert.equal(allowedExpertTools(restored).has('ihome_read_tasks'), role === 'ihome-task-assistant')
-    for (const name of ['ihome_propose_design', 'ihome_propose_task', 'ihome_propose_record', 'ihome_propose_need', 'ihome_consult_expert', 'bash']) {
+    for (const name of ['ihome_propose_design_decision', 'ihome_propose_design', 'ihome_propose_task', 'ihome_propose_record', 'ihome_propose_need', 'ihome_consult_expert', 'bash']) {
       assert.equal(allowedExpertTools(restored).has(name), false)
     }
   }

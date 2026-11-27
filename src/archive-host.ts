@@ -1,3 +1,5 @@
+import { createDesignReviewTools } from './design-review'
+import type { IHomeDesignsService } from './design-host'
 import { allowedExpertTools } from './expert-dispatch'
 import { prepareArchiveChange, createArchive, validateArchive, assertCurrentHouse, attachmentStage, documentStages } from './archive-model'
 import type { Archive, ArchiveFile } from './archive-model'
@@ -6,6 +8,7 @@ import { createRecordProposalTool } from './archive-record-tool'
 
 /** The subset of the DSH 0.2.2-rc.5 host services used by this plugin. */
 export interface ArchiveHostContext {
+  ihomeDesigns: IHomeDesignsService
   storageDomain: {
     open(spec: {
       name: string
@@ -143,6 +146,8 @@ export async function mountArchive(ctx: ArchiveHostContext): Promise<void> {
           return tool.execute(args, execution)
         },
       }, { when: context => allowedExpertTools(context).has(tool.name) })
+      for (const tool of createDesignReviewTools({ readArchive: read, readDesign: () => ctx.ihomeDesigns.read(),
+        saveArchive: (next, signal) => saveArchive(table, next, signal), questions: ctx.userQuestions })) disposers.push(registerTool(tool))
       const route = (handler: (request: Request) => Promise<Response>) => async (request: Request) => {
         try {
           request.signal.throwIfAborted()

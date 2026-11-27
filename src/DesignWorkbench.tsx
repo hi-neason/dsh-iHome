@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { DesignRoomLink } from './DesignRoomLink'
 import { DesignVersions } from './DesignVersions'
 import { DesignProjectFiles } from './DesignProjectFiles'
 import { DesignAssets } from './DesignAssets'
@@ -102,6 +103,7 @@ export function DesignWorkbench({ onAsk, archive }: { archive: ArchiveService, o
     if (saved) setUndo({ designId: scheme.id, revision: state.revision + 1, model })
     return saved
   }
+  const room = floor.items.find(item => item.id === selectedId && item.kind === 'room')
   const canUndo = undo && undo.designId === scheme.id && undo.revision === state.revision
   async function toggleFullscreen() {
     try {
@@ -132,6 +134,9 @@ export function DesignWorkbench({ onAsk, archive }: { archive: ArchiveService, o
           `楼层「${floor.name}」(${floor.id})`, element && `对象「${element.name}」(${element.id})`].filter(Boolean).join('，')
         onAsk('/户型设计师 ' + context + '。' + (version ? '请结合这个版本讨论备选设计。' : '我想调整这里的设计：'))
       }}>与设计师讨论{selectedId ? '所选对象' : '本层'}</button>
+      <button onClick={() => onAsk('/户型设计师 请结合家庭档案中的家人、居住需求和实测尺寸，评审方案「' + scheme.name + '」(' + scheme.id + ')' +
+        (version ? ' 的当前草稿，和保存版本「' + version.name + '」(' + version.id + ') 比较' : ' 的当前草稿') +
+        '。指出使用冲突、可选布局和还需要实测的位置。')}>评审{version ? '并比较版本' : '布局'}</button>
       {document.fullscreenEnabled && <button type="button" onClick={toggleFullscreen}>切换全屏</button>}
     </div>
     <div role="group" aria-label="视图" className="ih-design-bar">
@@ -145,6 +150,10 @@ export function DesignWorkbench({ onAsk, archive }: { archive: ArchiveService, o
         const level = model.floors.find(value => [...value.walls, ...value.openings, ...value.items, ...(value.assets ?? [])].some(element => element.id === id))
         if (level) setFloorId(level.id)
       }} /> : <ReferencedPlan key={'plan:' + scheme.id + ':' + (version?.id ?? '')} model={model} floorId={floor.id} selectedId={selectedId} onSelect={setSelectedId} onChange={replace} readonly={!!version} />}
+    {room && <DesignRoomLink archive={archive} value={room.roomId} disabled={busy || !!version}
+      change={roomId => void replace({ ...model, floors: model.floors.map(level => level.id === floor.id ? {
+        ...level, items: level.items.map(item => item.id === room.id ? { ...item, roomId } : item),
+      } : level) })} />}
     <DesignReferenceEditor key={'reference:' + scheme.id + ':' + floor.id + ':' + (version?.id ?? state.revision)} floor={floor} archive={archive}
       disabled={busy || !!version} save={reference => replace({ ...model, floors: model.floors.map(level => level.id === floor.id ? { ...level, reference } : level) })} />
     <DesignAssets key={'assets:' + scheme.id + ':' + floor.id} model={model} floorId={floor.id} readonly={busy || !!version} onChange={replace} />

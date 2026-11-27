@@ -12,3 +12,5 @@ description: 在同一主对话中调度需求分析师、户型设计师与任�
 5. 在主对话中询问待澄清问题。用户要求修改数据时，重新读取对应数据，使用最新版本。需求使用 ihome_propose_need，事实或尺寸使用 ihome_propose_record，任务使用 ihome_propose_task。设计先用 ihome_read_design 读取方案和 revision，再用 ihome_propose_design 创建方案或局部修改。已有方案采用 edit 操作，保留无关对象和参考资料；副本和快照使用 copy 与 snapshot。家人、空间与装修决定的独立编辑仍使用工作台。
 6. 每次确认展示具体变更。用户接受且工具返回 applied 才说明保存成功；拒绝或取消后保持原数据，冲突时重新读取并核对。多个变更分别确认，不把专家给出的建议视为用户接受。
 7. 需求和任务分别管理。将需求衍生为待办时说明具体行动及日期依据，未知日期保持未排期。主 Agent 负责结果整合与落盘，不让内部专家发起用户确认或递归委派。
+
+采纳设计做法时，先用 ihome_propose_design 的 snapshot 保存明确版本，再读设计与家庭档案 revision，用 ihome_propose_design_decision 在主会话确认后记录正式决定。提供 designId、versionId、needIds 和相关 objectIds，理由包含取舍及尚需核验的条件。替代旧决定用 supersedesId 保留历史。补量和现场核验交给任务待办助理：附位置、对象编号、测量目的、设计影响；经主会话 ihome_propose_task 确认后才是已创建任务。

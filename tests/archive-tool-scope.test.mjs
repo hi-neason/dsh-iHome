@@ -28,7 +28,7 @@ const context = cwd => ({ signal: new AbortController().signal, agent: { session
 
 test('all household tools hide and refuse execution outside the dedicated workspace', async () => {
   const f = await fixture()
-  assert.equal(f.registered.length, 3)
+  assert.equal(f.registered.length, 5)
   const initial = f.counts()
   for (const { tool, options } of f.registered) {
     for (const execution of [context('/tmp/ordinary'), context(iHomeWorkspacePath() + '/child'), context(undefined), { signal: new AbortController().signal }]) {
