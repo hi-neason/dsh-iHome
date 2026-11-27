@@ -7,6 +7,7 @@ test('media route stores supported files locally and only serves IDs registered 
   let route
   const files = new Map(), contents = new Map()
   await mountDesignMedia({
+    tools: { register() { return () => {} } },
     async effect(setup) { await setup() },
     connection: { fetch: { register(r) { route = r; return () => {} } } },
     storageDomain: { async open() { return { table() { return { get: id => files.get(id), put: (id,value) => files.set(id,value) } }, close() {} } } },

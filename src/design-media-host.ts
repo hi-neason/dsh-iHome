@@ -1,3 +1,6 @@
+import { allowedExpertTools } from './expert-dispatch.ts'
+import type { IHomeToolContext } from './ihome-workspace-path'
+import { createDesignReferenceTool, type DesignReferenceAccess } from './design-reference-tool.ts'
 import type { ArchiveHostContext } from './archive-host'
 import type { ArchiveFile } from './archive-model'
 
@@ -18,7 +21,9 @@ function parseMedia(raw: unknown): Media {
     !['image/png','image/jpeg','image/webp','model/gltf-binary'].includes(value.mime)) throw new Error('素材记录无效。')
   return { attachmentId:value.attachmentId, name:value.name, bytes:value.bytes, mime:value.mime }
 }
-export interface MediaHost extends Pick<ArchiveHostContext,'attachments'|'connection'|'effect'> {
+export interface MediaHost extends Pick<ArchiveHostContext,'ihomeDesigns'|'connection'|'effect'> {
+  attachments: ArchiveHostContext['attachments'] & Pick<DesignReferenceAccess, 'saveImage'>
+  tools: { register(tool: ReturnType<typeof createDesignReferenceTool>, options: { when(ctx: IHomeToolContext): boolean }): () => void | Promise<void> }
   storageDomain: { open(spec: { name:string, version:number, tables:{ files:{ valueSchema:{ parse(raw:unknown):Media } } } }):Promise<{
     table(key:'files'):{ get(id:string):Media|undefined, put(id:string, value:Media):Promise<void> }, close():Promise<void>
   }> }
@@ -26,9 +31,33 @@ export interface MediaHost extends Pick<ArchiveHostContext,'attachments'|'connec
 export async function mountDesignMedia(ctx: MediaHost) {
   await ctx.effect(async () => {
     const domain = await ctx.storageDomain.open({name:'ihome_design_media',version:1,tables:{files:{valueSchema:{parse:parseMedia}}}})
+    const disposers: (() => void | Promise<void>)[] = []
+    async function close() {
+      try { for (const dispose of disposers.reverse()) await dispose() } finally { await domain.close() }
+    }
     try {
       const files = domain.table('files')
-      const dispose = ctx.connection.fetch.register({path:'/api/ihome/design-media',methods:['GET','POST'],requestBody:'buffered',
+      async function readMedia(file: Media, signal: AbortSignal) {
+        const chunks: Uint8Array<ArrayBuffer>[] = []
+        for await (const chunk of ctx.attachments.readFileStream(file, signal)) chunks.push(new Uint8Array(chunk))
+        return new Blob(chunks, { type: file.mime })
+      }
+      const referenceTool = createDesignReferenceTool({
+        readDesign: () => ctx.ihomeDesigns.read(),
+        saveImage: input => ctx.attachments.saveImage(input),
+        async readMedia(id, signal) {
+          const file = files.get(id)
+          if (!file) throw new Error('在本机设计素材中找不到这张底图。')
+          const bytes = await (await readMedia(file, signal)).arrayBuffer()
+          return { data: new Uint8Array(bytes), mime: file.mime, name: file.name }
+        },
+      })
+      const visible = (context: IHomeToolContext) => allowedExpertTools(context).has(referenceTool.name)
+      disposers.push(ctx.tools.register({ ...referenceTool, async execute(args, execution: IHomeToolContext & { signal: AbortSignal }) {
+        if (!visible(execution)) throw new Error('当前专家无法读取户型底图。')
+        return referenceTool.execute(args, execution)
+      } }, { when: visible }))
+      disposers.push(ctx.connection.fetch.register({path:'/api/ihome/design-media',methods:['GET','POST'],requestBody:'buffered',
         async fetch(request) {
           const url = new URL(request.url)
           try {
@@ -47,15 +76,13 @@ export async function mountDesignMedia(ctx: MediaHost) {
             const id = url.searchParams.get('id') ?? ''
             const file = /^sha256:[a-f0-9]{64}$/.test(id) ? files.get(id) : undefined
             if (!file) return Response.json({error:'在本机设计素材中找不到该文件。'},{status:404})
-            const chunks: Uint8Array<ArrayBuffer>[] = []
-            for await (const chunk of ctx.attachments.readFileStream(file,request.signal)) chunks.push(new Uint8Array(chunk))
-            return new Response(new Blob(chunks),{headers:{'content-type':file.mime,'x-content-type-options':'nosniff','cache-control':'private, max-age=31536000, immutable'}})
+            return new Response(await readMedia(file, request.signal),{headers:{'content-type':file.mime,'x-content-type-options':'nosniff','cache-control':'private, max-age=31536000, immutable'}})
           } catch (error) {
             return Response.json({error:error instanceof Error ? error.message : '素材读写失败。'},{status:400})
           }
         },
-      })
-      return async () => { await dispose(); await domain.close() }
-    } catch (error) { await domain.close(); throw error }
+      }))
+      return close
+    } catch (error) { await close(); throw error }
   })
 }

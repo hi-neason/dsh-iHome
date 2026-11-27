@@ -33,10 +33,10 @@ export function expertRole(context: IHomeToolContext): IHomeAgentRole {
   return (Object.keys(expertProviders) as ExpertRole[]).find(role => expertProviders[role] === descriptor.provider) ?? 'unsupported'
 }
 
-export const coordinatorTools: ReadonlySet<string> = new Set(['skill', 'ihome_read_archive', 'ihome_propose_need', 'ihome_propose_record', 'ihome_read_tasks', 'ihome_propose_task', 'ihome_read_design', 'ihome_propose_design', 'ihome_review_design', 'ihome_propose_design_decision', CONSULT_EXPERT_TOOL])
+export const coordinatorTools: ReadonlySet<string> = new Set(['skill', 'ihome_read_archive', 'ihome_propose_need', 'ihome_propose_record', 'ihome_read_tasks', 'ihome_propose_task', 'ihome_read_design', 'ihome_read_design_reference', 'ihome_propose_design', 'ihome_review_design', 'ihome_propose_design_decision', CONSULT_EXPERT_TOOL])
 const needsTools = new Set(['skill', 'ihome_read_archive'])
 const taskTools = new Set(['skill', 'ihome_read_archive', 'ihome_read_tasks'])
-const designerTools = new Set(['skill', 'ihome_read_archive', 'ihome_read_design', 'ihome_review_design'])
+const designerTools = new Set(['skill', 'ihome_read_archive', 'ihome_read_design', 'ihome_read_design_reference', 'ihome_review_design'])
 const noTools = new Set<string>()
 export function allowedExpertTools(context: IHomeToolContext): ReadonlySet<string> {
   if (!isIHomeToolContext(context)) return noTools
