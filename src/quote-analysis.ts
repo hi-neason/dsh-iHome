@@ -1,4 +1,5 @@
 import type { QuoteBoard, QuoteLine, QuoteVersion } from './quote-model.ts'
+import type { QuoteScopeItem } from './quote-scope.ts'
 
 import { quoteStatusLabels } from './quote-version.ts'
 
@@ -21,8 +22,16 @@ export function quoteVersions(board: QuoteBoard, vendorId: string) {
   return board.quotes.filter(quote => quote.vendorId === vendorId).reverse().sort((a, b) => b.date.localeCompare(a.date))
 }
 
-interface Cell { lines: QuoteLine[], amount: number | null }
-interface Row { key: string, label: string, cells: Cell[], issues: string[], spread: number | null }
+export function ownerScopeDifferences(scope: QuoteScopeItem, line: QuoteLine): string[] {
+  const differences: string[] = []
+  if (scope.unit && unitBasis(line.unit) !== unitBasis(scope.unit)) differences.push(`单位与底稿不符（底稿 ${scope.unit}，报价 ${line.unit || '未填'}）`)
+  if (scope.quantity !== null && line.quantity !== scope.quantity) differences.push(`工程量与底稿不符（底稿 ${scope.quantity}，报价 ${line.quantity ?? '未填'}）`)
+  if (scope.spec && basisText(line.spec) !== basisText(scope.spec)) differences.push(`规格与底稿不符（底稿 ${scope.spec}，报价 ${line.spec || '未填'}）`)
+  return differences
+}
+
+interface Cell { lines: QuoteLine[], amount: number | null, scopeIssues: string[] }
+interface Row { key: string, label: string, scopeItem: QuoteScopeItem | null, cells: Cell[], issues: string[], spread: number | null }
 
 function comparisonIssues(cells: Cell[], quotes: QuoteVersion[]) {
   const issues: string[] = []
@@ -58,7 +67,8 @@ export function compareQuotes(board: QuoteBoard, selectedVersions: Record<string
     const quote = selection === undefined ? versions[0] : versions.find(version => version.id === selection)
     return quote ? [quote] : []
   })
-  const labels = new Map<string, string>()
+  const scopeItems = new Map((board.scopeItems ?? []).map(item => [item.key, item]))
+  const labels = new Map(Array.from(scopeItems, ([key, item]) => [key, item.label]))
   const indexed = quotes.map(quote => {
     const entries = new Map<string, QuoteLine[]>()
     for (const line of quote.lines) {
@@ -73,11 +83,16 @@ export function compareQuotes(board: QuoteBoard, selectedVersions: Record<string
   const subtotals = quotes.map(() => 0)
   let comparableCount = 0
   for (const [key, label] of labels) {
+    const scopeItem = scopeItems.get(key) ?? null
     const cells = indexed.map(entries => {
       const lines = entries.get(key) ?? []
-      return { lines, amount: lines.length === 1 ? lineAmount(lines[0]) : null }
+      const scopeIssues = scopeItem ? lines.flatMap(line => ownerScopeDifferences(scopeItem, line)) : []
+      if (scopeItem && !lines.length) scopeIssues.push('业主要求项未列入报价')
+      return { lines, amount: lines.length === 1 ? lineAmount(lines[0]) : null, scopeIssues }
     })
     const issues = comparisonIssues(cells, quotes)
+    if (scopeItem && cells.length && cells.every(cell => !cell.lines.length)) issues.push('该底稿项在所选报价中均未列明')
+    if (cells.some(cell => cell.lines.length && cell.scopeIssues.length)) issues.push('报价与业主询价底稿不符')
     let spread = null
     if (!issues.length) {
       const cents = cells.map(cell => quoteCents(cell.amount!))
@@ -85,7 +100,7 @@ export function compareQuotes(board: QuoteBoard, selectedVersions: Record<string
       cents.forEach((price, column) => { subtotals[column] += price })
       comparableCount++
     }
-    rows.push({ key, label, cells, issues, spread })
+    rows.push({ key, label, scopeItem, cells, issues, spread })
   }
   return { quotes, rows, comparableCount, subtotals: subtotals.map(value => comparableCount ? value / 100 : null) }
 }

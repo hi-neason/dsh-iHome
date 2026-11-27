@@ -6,7 +6,7 @@ import { changeQuoteBoard, QuoteConflict, quoteCollections, quoteObject, type Qu
 import { quoteStatusLabels } from './quote-version.ts'
 
 const output: ArchiveTool['output'] = { schema: {}, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] }
-const recordTypes: Record<QuoteCollection, string> = { vendors: '候选团队', quotes: '报价版本', references: '参照单价', reviews: '商家澄清', decisions: '选商决定' }
+const recordTypes: Record<QuoteCollection, string> = { vendors: '候选团队', scopeItems: '业主询价底稿', quotes: '报价版本', references: '参照单价', reviews: '商家澄清', decisions: '选商决定' }
 const fieldNames: Record<string, string> = {
   id: '记录编号', name: '团队名称', city: '城市', contact: '联系方式', scope: '承包范围', credentials: '资质核验',
   visit: '考察记录', source: '出处', vendorId: '团队', version: '版本名称', date: '日期', statedTotal: '原报总额（元）',
@@ -78,7 +78,7 @@ function readQuotes(board: QuoteBoard, raw: unknown) {
   const compact = quotes.reduce((sum, quote) => sum + quote.lines.length, 0) > 40
   const keys = new Set(quotes.flatMap(quote => quote.lines.map(line => line.key)))
   const relevantDecisions = 'vendorId' in query ? decisions.filter(item => item.comparedQuoteIds.some(id => quoteIds.has(id))) : decisions
-  return { revision: board.revision, vendors, quotes: quotes.map(quote => {
+  return { revision: board.revision, vendors, scopeItems: board.scopeItems, quotes: quotes.map(quote => {
     if (!compact && JSON.stringify(quote).length <= 12000) return quote
     const { lines, ...metadata } = quote
     return { ...metadata, lineCount: lines.length, queryHint }
@@ -92,6 +92,7 @@ const recordDescription = [
   '提交一条完整记录。新记录自拟唯一 id，重试沿用同一 id。更新前先读全原值并保留未改字段。',
   'vendors: id,name 必填；city,contact,scope,credentials,visit,source 是字符串。',
   'quotes: id,vendorId,version,date(YYYY-MM-DD),source,scope,statedTotal(元或null),lines；每行 key(本版唯一的对齐项),label(原名),unit,quantity,unitPrice,amount,spec,status,source(原文位置)。数量、单价、原合价未知填null。status=included/excluded/allowance/owner/unknown。复报价另起 id 和版本名。',
+  'scopeItems: id,key(与报价分项一致),label,unit,quantity(未知为null),spec,source(图纸或业主确认范围出处)。',
   'references: id,key,city,date(YYYY-MM-DD),source,unit,spec,scope,unitPrice(元)。',
   'reviews: id,quoteId,topic,question,source,answer,answerSource,status(open/answered)；未答复时两个答复字段为空串，已答复须有原文及来源。',
   'decisions: id,quoteId(业主选中的版本),comparedQuoteIds(包含选中项，每家一版),reason(取舍依据)。宿主生成冻结报告。仅在业主已选定版本时提出。',

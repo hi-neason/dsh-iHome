@@ -61,8 +61,12 @@ export function freezeDecision(board: QuoteBoard, raw: Record<string, unknown>):
   out.push('', '分项比较')
   for (const row of result.rows) {
     out.push(row.label + '（' + row.key + '）　' + (row.issues.length ? row.issues.join('、') : '最高最低差额 ' + money(row.spread)))
+    if (row.scopeItem) {
+      const item = row.scopeItem
+      out.push('  业主询价底稿　' + (item.quantity ?? '数量待定') + ' ' + item.unit + '　' + item.spec + '　出处 ' + item.source)
+    }
     row.cells.forEach((cell, index) => out.push('  ' + title(result.quotes[index]) + '　' +
-      (cell.lines.length ? money(cell.amount) + '　' + cell.lines.map(line => line.source).join('、') : '未列项')))
+      (cell.lines.length ? money(cell.amount) + '　' + cell.lines.map(line => line.source).join('、') : '未列项') + (cell.scopeIssues.length ? '　' + cell.scopeIssues.join('、') : '')))
   }
   for (const quote of result.quotes) {
     const audit = auditQuote(board, quote.id, date)

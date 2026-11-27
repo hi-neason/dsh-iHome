@@ -124,3 +124,14 @@ test('完整记录、指定版本比较、澄清及冻结决定可从数字人�
   assert.equal((await f.read({ vendorId: 'v2' })).decisions.length, 0)
   assert.equal((await f.propose('decisions', decision, 0)).status, 'unchanged')
 })
+
+test('底稿可从主会话确认，报价专家读取该要求并识别整份报价的遗漏', async () => {
+  const f = fixture()
+  const scope = { id: 's', key: '清运', label: '垃圾清运', quantity: null, spec: '', unit: '', source: '业主清单第3项' }
+  await f.propose('scopeItems', scope)
+  await f.propose('vendors', firstVendor)
+  await f.propose('quotes', quote)
+  const specialist = execution('ihome-quotes-expert')
+  assert.equal((await f.read({}, specialist)).scopeItems[0].source, scope.source)
+  assert.match(JSON.stringify((await f.read({ quoteId: 'q1' }, specialist)).audit.questions), /业主清单第3项/)
+})

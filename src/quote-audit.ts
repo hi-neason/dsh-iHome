@@ -1,6 +1,7 @@
 import type { QuoteBoard, QuoteLine, QuoteVersion } from './quote-model.ts'
-import { basisText, calculatedAmount, quoteCents, unitBasis } from './quote-analysis.ts'
+import { basisText, calculatedAmount, ownerScopeDifferences, quoteCents, unitBasis } from './quote-analysis.ts'
 import type { QuoteReference } from './quote-reference.ts'
+import { quoteStatusLabels } from './quote-version.ts'
 
 export interface AuditQuestion {
   item: string
@@ -45,6 +46,11 @@ export function auditQuote(board: QuoteBoard, quoteId: string, asOfDate = auditD
   let complete = quote.lines.length > 0
   const keyCounts = new Map<string, number>()
   for (const line of quote.lines) keyCounts.set(line.key, (keyCounts.get(line.key) ?? 0) + 1)
+  const scopeItems = new Map((board.scopeItems ?? []).map(item => [item.key, item]))
+  for (const scope of scopeItems.values()) {
+    if (!keyCounts.has(scope.key)) add(scope.label, '范围', `业主要求项“${scope.key}”未列入本版报价`,
+      '请确认是否已计入其他分项，并注明对应行。如需另计，请按询价底稿补充书面报价。', [scope.source, quote.source].filter(Boolean).join(' · '))
+  }
   const references = new Map<string, QuoteReference[]>()
   for (const reference of board.references) {
     const group = references.get(reference.key)
@@ -53,6 +59,12 @@ export function auditQuote(board: QuoteBoard, quoteId: string, asOfDate = auditD
   }
   const checkedLines = quote.lines.map(line => {
     const source = [quote.source, line.source].filter(Boolean).join(' · ')
+    const scope = scopeItems.get(line.key)
+    if (scope) {
+      const differences = ownerScopeDifferences(scope, line)
+      if (line.status !== 'included') differences.push(`业主要求项标注为${quoteStatusLabels[line.status]}`)
+      if (differences.length) add(line.label, '范围', differences.join('；'), '请对照业主底稿说明差异并确认由谁承担，必要时提供修订报价。', [scope.source, source].filter(Boolean).join(' · '))
+    }
     const calculated = calculatedAmount(line)
     const amount = line.amount ?? calculated
     const duplicate = keyCounts.get(line.key)! > 1
