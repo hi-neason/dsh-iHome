@@ -6,7 +6,7 @@ import detailCss from './module-detail.css'
 import knowledgeCss from './knowledge.css'
 
 interface ModuleDetailProps {
-  id: Exclude<ModuleId, 'archive' | 'documents' | 'tasks'> | null
+  id: Exclude<ModuleId, 'archive' | 'documents' | 'tasks' | 'quotes'> | null
   onAsk: (prompt: string) => void
 }
 
@@ -16,21 +16,13 @@ interface ModuleContent {
   tasks: { title: string, description: string, prompt: string }[]
 }
 
-const content: Record<Exclude<ModuleId, 'knowledge' | 'design' | 'archive' | 'documents' | 'tasks'>, ModuleContent> = {
+const content: Record<Exclude<ModuleId, 'knowledge' | 'design' | 'archive' | 'documents' | 'tasks' | 'quotes'>, ModuleContent> = {
   materials: {
     intro: '先确认安装条件，再比较型号与价格。把采购时间和施工节点一起考虑。',
     checklist: ['记录候选产品的准确品牌、型号、规格和报价日期。', '核对尺寸、开孔、用电、给排水及安装预留要求。', '确认报价包含的配件、运输、安装和售后范围。', '结合现场工序，约定下单、到货、验货和安装时间。'],
     tasks: [
       { title: '比较候选产品', description: '按规格、价格和安装条件逐项对比。', prompt: '请帮我比较装修采购的候选产品。先询问品类、需求、预算、现场安装条件及候选型号。根据我提供的资料整理规格、价格与日期、配件、安装条件和售后对照表，缺少的参数标为待核实。' },
       { title: '安排采购清单', description: '把待购物品接到施工计划上。', prompt: '请先了解我的装修进度、设计方案和已购物品，再按房间整理待采购清单，标记需要提前确认的设备尺寸、水电预留、交付周期和安装前置条件。' },
-    ],
-  },
-  quotes: {
-    intro: '把团队的承包范围、工程量与材料做法对齐，再判断报价和合同是否符合你的需求。',
-    checklist: ['收集各团队的承包范围、报价版本和对应图纸。', '核对工程量、计价单位、材料型号与施工做法。', '逐项确认暂估、遗漏、增项、税费和清运费用。', '核对付款节点、工期、变更确认和保修约定。'],
-    tasks: [
-      { title: '对齐两份装修报价', description: '找出范围差异和待商家澄清的项目。', prompt: '我想对比装修报价。请先问我项目范围及已有报价文件，再按相同施工内容对齐单位、工程量、单价、材料与工艺，区分明确差异与信息缺失。每项引用原报价条目，整理给商家的澄清问题。' },
-      { title: '准备签约前的问题', description: '围绕付款、工期、增项和保修核对。', prompt: '请帮助我准备装修签约前的问题清单。先了解承包方式和已有合同，再检查付款节点、工期、材料替换、工程变更、验收及保修条款。请引用合同原文，缺失约定列为待双方确认。' },
     ],
   },
   budget: {

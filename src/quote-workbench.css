@@ -1,0 +1,19 @@
+.ih-quotes { margin: 14px 0; color: var(--ih-ink); font-size: 14px; overflow-wrap: anywhere; }
+.ih-quotes button, .ih-quotes :is(input,textarea,select) { font: inherit; color: inherit; background: var(--ih-surface); border: 1px solid var(--ih-line); border-radius: 6px; padding: 6px 9px; }
+.ih-quotes button { cursor: pointer; }
+.ih-quotes button:disabled { opacity: .55; cursor: default; }
+.ih-quotes nav, .ih-quotes header, .ih-quote-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.ih-quotes header { justify-content: space-between; }
+.ih-quotes nav { margin: 15px 0; padding-bottom: 10px; border-bottom: 1px solid var(--ih-line); }
+.ih-quotes button[aria-pressed=true], .ih-quotes button[type=submit] { color: var(--ih-bg); background: var(--ih-ink); }
+.ih-quotes h2 { margin: 8px 0; font-size: 18px; }
+.ih-quotes h3 { margin: 4px 0; font-size: 15px; }
+.ih-quotes :is(article,fieldset) { min-width: 0; margin: 10px 0; padding: 12px; border: 1px solid var(--ih-line); border-radius: 8px; }
+.ih-quotes label { display: grid; gap: 4px; margin: 7px 0; }
+.ih-quotes :is(input,textarea,select) { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.ih-quotes dl div { margin: 6px 0; }
+.ih-quotes :is(dt,small) { color: var(--ih-muted); }
+.ih-quotes dd { margin: 2px 0; white-space: pre-wrap; }
+.ih-quotes [role=alert] { border-inline-start: 3px solid currentColor; padding-inline-start: 8px; }
+.ih-quotes table { width: 100%; border-collapse: collapse; }
+.ih-quotes :is(th,td) { padding: 6px; border-bottom: 1px solid var(--ih-line); text-align: left; }
