@@ -1,4 +1,5 @@
 import type { ArchiveHostContext } from './archive-host'
+import { registerQuoteTools } from './quote-tools'
 import { changeQuoteBoard, parseQuoteBoard, QuoteConflict, type QuoteBoard } from './quote-model'
 
 export interface QuoteTable {
@@ -43,6 +44,7 @@ export async function mountQuotes(ctx: QuoteHostContext): Promise<void> {
           }
         },
       }))
+      registerQuoteTools(ctx, read, save, disposers)
       return async () => { for (const dispose of disposers.reverse()) await dispose(); await domain.close() }
     } catch (error) {
       for (const dispose of disposers.reverse()) await dispose()

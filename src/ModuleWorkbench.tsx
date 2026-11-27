@@ -38,11 +38,11 @@ export function ModuleWorkbench({ id, archiveService, taskService, onAsk, onOpen
         </button>}
       </header>
       {sharedTeam && !showDirectory && <nav className="ih-team-workbench-tabs" aria-label="专家团工作台">
-        {(['archive', 'design', 'tasks'] as const).map(next => <button type="button" key={next}
+        {(['archive', 'design', 'quotes', 'tasks'] as const).map(next => <button type="button" key={next}
           aria-pressed={id === next} onClick={() => {
             setNavigationError('')
             void Promise.resolve(onOpenModule(next)).catch(error => setNavigationError(String(error.message ?? error)))
-          }}>{next === 'archive' ? '居住需求' : next === 'design' ? '户型设计' : '任务待办'}</button>)}
+          }}>{next === 'archive' ? '居住需求' : next === 'design' ? '户型设计' : next === 'quotes' ? '选商核价' : '任务待办'}</button>)}
       </nav>}
       {navigationError && <p role="alert">{navigationError}</p>}
       {!showDirectory && historyLinks?.map(link => <button key={link.label} className="ih-workbench-history" type="button" onClick={link.open}>{link.label}</button>)}

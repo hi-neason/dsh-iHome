@@ -6,7 +6,7 @@
       config:
         id: ihome-needs-analyst
         name: iHome专家团
-        description: 在同一会话中调度需求分析师和任务待办助理。
+        description: 在同一会话中调度需求分析师、户型设计师、选商核价分析师和任务待办助理。
         plugins:
           - id: ihome-native-tools
             name: '@deepseek-ai/dsh-tool-executor-native'

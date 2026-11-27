@@ -3,17 +3,19 @@ import type { ArchiveTool } from './archive-host'
 import { isIHomeToolContext, type IHomeToolContext } from './ihome-workspace-path.ts'
 
 export const CONSULT_EXPERT_TOOL = 'ihome_consult_expert'
-export type ExpertRole = 'ihome-needs-analyst' | 'ihome-task-assistant' | 'ihome-floorplan-designer'
+export type ExpertRole = 'ihome-needs-analyst' | 'ihome-task-assistant' | 'ihome-floorplan-designer' | 'ihome-quotes-analyst'
 export type IHomeAgentRole = ExpertRole | 'coordinator' | 'unsupported'
 export const expertProviders: Record<ExpertRole, string> = {
   'ihome-needs-analyst': 'ihome-needs-expert',
   'ihome-task-assistant': 'ihome-task-expert',
   'ihome-floorplan-designer': 'ihome-floorplan-expert',
+  'ihome-quotes-analyst': 'ihome-quotes-expert',
 }
 const expertNames: Record<ExpertRole, string> = {
   'ihome-needs-analyst': '需求分析师',
   'ihome-task-assistant': '任务待办助理',
   'ihome-floorplan-designer': '户型设计师',
+  'ihome-quotes-analyst': '选商核价分析师',
 }
 interface SessionIdentity {
   header: { cwd?: string, parentSession?: string, delegationDepth?: number, origin?: string, agentPreset?: string }
@@ -33,10 +35,11 @@ export function expertRole(context: IHomeToolContext): IHomeAgentRole {
   return (Object.keys(expertProviders) as ExpertRole[]).find(role => expertProviders[role] === descriptor.provider) ?? 'unsupported'
 }
 
-export const coordinatorTools: ReadonlySet<string> = new Set(['skill', 'ihome_read_archive', 'ihome_propose_need', 'ihome_propose_record', 'ihome_read_tasks', 'ihome_propose_task', 'ihome_read_design', 'ihome_read_design_reference', 'ihome_propose_design', 'ihome_review_design', 'ihome_propose_design_decision', CONSULT_EXPERT_TOOL])
+export const coordinatorTools: ReadonlySet<string> = new Set(['skill', 'ihome_read_archive', 'ihome_propose_need', 'ihome_propose_record', 'ihome_read_tasks', 'ihome_propose_task', 'ihome_read_design', 'ihome_read_design_reference', 'ihome_propose_design', 'ihome_review_design', 'ihome_propose_design_decision', 'ihome_read_quotes', 'ihome_propose_quote', CONSULT_EXPERT_TOOL])
 const needsTools = new Set(['skill', 'ihome_read_archive'])
 const taskTools = new Set(['skill', 'ihome_read_archive', 'ihome_read_tasks'])
 const designerTools = new Set(['skill', 'ihome_read_archive', 'ihome_read_design', 'ihome_read_design_reference', 'ihome_review_design'])
+const quotesTools = new Set(['skill', 'ihome_read_archive', 'ihome_read_quotes'])
 const noTools = new Set<string>()
 export function allowedExpertTools(context: IHomeToolContext): ReadonlySet<string> {
   if (!isIHomeToolContext(context)) return noTools
@@ -45,6 +48,7 @@ export function allowedExpertTools(context: IHomeToolContext): ReadonlySet<strin
     case 'ihome-needs-analyst': return needsTools
     case 'ihome-task-assistant': return taskTools
     case 'ihome-floorplan-designer': return designerTools
+    case 'ihome-quotes-analyst': return quotesTools
     default: return noTools
   }
 }
@@ -104,7 +108,7 @@ export function mountExpertDispatch(ctx: ExpertDispatchContext): void {
   }
   ctx.tools.register({
     name: CONSULT_EXPERT_TOOL,
-    description: '在同一主会话委派需求分析师、户型设计师或任务待办助理执行独立分析。专家可读取本地数据，返回分析与修改建议。请提供具体 task 和必要的对话 context。专家无法修改数据；由主 Agent 审阅后调用 propose 工具，在主对话中请用户确认。',
+    description: '在同一主会话委派需求分析师、户型设计师、选商核价分析师或任务待办助理执行独立分析。专家可读取本地数据，返回分析与修改建议。请提供具体 task 和必要的对话 context。专家无法修改数据；由主 Agent 审阅后调用 propose 工具，在主对话中请用户确认。',
     parameters: { type: 'object', additionalProperties: false, properties: {
       expert: { type: 'string', enum: Object.keys(expertProviders) },
       task: { type: 'string', minLength: 1, maxLength: 12000 },
@@ -144,7 +148,7 @@ export async function consultExpert(
   if (!(options.explicit ? isIHomeRoot(execution) : isIHomeCoordinator(execution)) || !execution.agent) throw new Error('请在 iHome 主会话中调度专家。')
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('专家委派参数无效。')
   const args = raw as Record<string, unknown>
-  if (typeof args.expert !== 'string' || !Object.hasOwn(expertProviders, args.expert)) throw new Error('请选择需求分析师、户型设计师或任务待办助理。')
+  if (typeof args.expert !== 'string' || !Object.hasOwn(expertProviders, args.expert)) throw new Error('请选择需求分析师、户型设计师、选商核价分析师或任务待办助理。')
   if (typeof args.task !== 'string' || !args.task.trim() || args.task.length > 12000) throw new Error('请提供有效的专家任务，最多 12000 字。')
   if (args.context !== undefined && (typeof args.context !== 'string' || args.context.length > 24000)) throw new Error('专家上下文最多 24000 字。')
   const expert = args.expert as ExpertRole

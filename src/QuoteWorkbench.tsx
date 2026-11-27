@@ -67,7 +67,7 @@ export function QuoteWorkbench({ onAsk }: { onAsk: (prompt: string) => void }) {
     }
   }
   return <div className="ih-quotes"><style>{css}</style>
-    <div className="ih-quote-actions"><button onClick={() => onAsk('请帮我比较装修团队和报价，先核对已有依据。')}>咨询分析师 ↗</button>
+    <div className="ih-quote-actions"><button onClick={() => onAsk('/选商核价分析师 请帮我比较装修团队和报价，先核对已有依据。')}>咨询分析师 ↗</button>
       <button onClick={() => { setBoard(undefined); setNotice(''); setReload(n => n + 1) }}>重新载入档案</button></div>
     {error && <p role="alert">{error}</p>}{notice && <small role="status">{notice}</small>}
     {!board ? <p>{error ? '暂时无法打开档案。' : '正在读取选商档案…'}</p> : <>

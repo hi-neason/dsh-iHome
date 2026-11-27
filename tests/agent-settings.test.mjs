@@ -93,7 +93,7 @@ test('team and expert settings are independent and preserve existing analyst pre
   const existing = { revision: 7, instructions: '先关注老人', enabledSkills: ['ihome-needs-review'] }
   const f = await fixture(new Map([[id, existing]]))
   const { presets } = await (await f.http()).json()
-  assert.deepEqual(presets.map(preset => preset.id), [EXPERT_TEAM_SETTINGS_ID, id, 'ihome-floorplan-designer', TASK_ASSISTANT_PRESET_ID])
+  assert.deepEqual(presets.map(preset => preset.id), [EXPERT_TEAM_SETTINGS_ID, id, 'ihome-floorplan-designer', 'ihome-quotes-analyst', TASK_ASSISTANT_PRESET_ID])
   assert.equal(f.service().get(id).instructions, existing.instructions)
   assert.equal(f.service().get(id).revision, 7)
   assert.deepEqual(f.service().get(id).enabledSkills, existing.enabledSkills)
@@ -105,6 +105,6 @@ test('team and expert settings are independent and preserve existing analyst pre
   assert.equal((await f.http({ ...taskChange, revision: 1, enabledSkills: ['ihome-needs-review'] })).status, 400)
   assert.equal(publicAgentPresets.length, 1)
   assert.equal(publicAgentPresets[0].id, id)
-  assert.deepEqual(publicAgentPresets[0].moduleIds, ['archive', 'tasks', 'design'])
+  assert.deepEqual(publicAgentPresets[0].moduleIds, ['archive', 'tasks', 'design', 'quotes'])
   await f.cleanup()
 })

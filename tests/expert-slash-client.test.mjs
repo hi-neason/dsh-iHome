@@ -34,26 +34,29 @@ function fixture(t) {
 const session = { sessionId: 'team' }
 const request = (query = '', position = 'leading') => ({ query, position, signal: new AbortController().signal })
 
-test('native slash source groups three experts and supports Chinese, English and localized search', async t => {
+test('native slash source groups all four experts and supports Chinese, English and localized search', async t => {
   const f = fixture(t)
   const rows = await f.source.candidates(session, request())
   assert.ok(f.source.order < 0, 'show the expert group before native commands and skills')
-  assert.deepEqual(rows.map(row => [row.name, row.section]), [['需求分析师', 'iHome专家团'], ['户型设计师', 'iHome专家团'], ['任务待办助理', 'iHome专家团']])
+  assert.deepEqual(rows.map(row => [row.name, row.section]), [['需求分析师', 'iHome专家团'], ['户型设计师', 'iHome专家团'], ['选商核价分析师', 'iHome专家团'], ['任务待办助理', 'iHome专家团']])
   assert.equal((await f.source.candidates(session, request('需分')))[0].name, '需求分析师')
   assert.equal((await f.source.candidates(session, request('TODO')))[0].name, '任务待办助理')
   assert.equal((await f.source.candidates(session, request('floorplan')))[0].name, '户型设计师')
+  assert.equal((await f.source.candidates(session, request('报价')))[0].name, '选商核价分析师')
+  assert.equal((await f.source.candidates(session, request('vendor')))[0].name, '选商核价分析师')
   assert.deepEqual(await f.source.candidates(session, request('unknown')), [])
   f.setLocale('en')
   const english = await f.source.candidates(session, request('n an'))
   assert.equal(english[0].label, 'Needs Analyst')
   assert.equal(english[0].section, 'iHome Expert Team')
+  assert.equal((await f.source.candidates(session, request('contractor')))[0].label, 'Contractor and Quote Analyst')
   assert.equal(f.requests(), 1)
 })
 
 test('selection replaces only the leading token and normal send retains native ownership', async t => {
   const { source } = fixture(t)
   const rows = await source.candidates(session, request())
-  assert.deepEqual(source.onPick({ session, candidate: rows[2], position: 'leading' }), { text: '/任务待办助理 ' })
+  assert.deepEqual(source.onPick({ session, candidate: rows[3], position: 'leading' }), { text: '/任务待办助理 ' })
   // Undefined preserves DSH's normal send path, including its attachments,
   // cancellation and queue/steer mode instead of a separate command submit.
   assert.equal(await source.matchEnter(session, '/任务待办助理 下周安排量房', new AbortController().signal, { attachments: 2 }), undefined)
@@ -72,7 +75,7 @@ test('standard and team modes both allow experts while workspace and subagent ga
   const [row] = await f.source.candidates(session, request())
   f.setPreset('standard')
   assert.deepEqual(f.source.onPick({ session, candidate: row, position: 'leading' }), { text: '/需求分析师 ' })
-  assert.equal((await f.source.candidates(session, request())).length, 3)
+  assert.equal((await f.source.candidates(session, request())).length, 4)
   assert.equal(await f.source.matchEnter(session, '/需求分析师 帮我', new AbortController().signal), undefined)
   f.setPreset(IHOME_TEAM_PRESET_ID)
   f.entry.cwd = '/different-workspace'
@@ -99,7 +102,7 @@ test('a cancelled menu request leaves a later opening usable and failure permits
     return Response.json({ path: '/home/owner/iHome工作区' })
   }
   await assert.rejects(f.source.candidates(session, request()), /offline/)
-  assert.equal((await f.source.candidates(session, request())).length, 3)
+  assert.equal((await f.source.candidates(session, request())).length, 4)
 })
 
 test('plugin lifecycle registers and disposes the native source and localized dictionaries', t => {
@@ -123,7 +126,7 @@ test('blank root sessions use host cwd and recover a missing catalog row without
   delete f.rows.team
   let refreshes = 0
   f.ctx.sessions.refresh = async () => { refreshes++; f.rows.team = f.entry }
-  assert.equal((await f.source.candidates(session, request())).length, 3)
+  assert.equal((await f.source.candidates(session, request())).length, 4)
   assert.equal(refreshes, 1)
   assert.equal(await f.source.matchEnter(session, '/任务待办助理 帮我安排量房', new AbortController().signal), undefined)
   delete f.rows.team
