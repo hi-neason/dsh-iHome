@@ -17,3 +17,4 @@
 .ih-quotes [role=alert] { border-inline-start: 3px solid currentColor; padding-inline-start: 8px; }
 .ih-quotes table { width: 100%; border-collapse: collapse; }
 .ih-quotes :is(th,td) { padding: 6px; border-bottom: 1px solid var(--ih-line); text-align: left; }
+.ih-quotes .ih-quote-report { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }

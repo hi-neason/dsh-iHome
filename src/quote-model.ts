@@ -1,3 +1,4 @@
+import { freezeDecision, parseDecision, type QuoteDecision } from './quote-decision.ts'
 import { assertUniqueQuoteReviews, parseQuoteReview, type QuoteReview } from './quote-review.ts'
 import { parseQuoteReference, type QuoteReference } from './quote-reference.ts'
 export type { QuoteReference } from './quote-reference.ts'
@@ -21,6 +22,7 @@ export interface QuoteBoard {
   quotes: QuoteVersion[]
   references: QuoteReference[]
   reviews: QuoteReview[]
+  decisions: QuoteDecision[]
 }
 
 export function quoteObject(value: unknown): Record<string, unknown> {
@@ -69,10 +71,12 @@ export function parseQuoteBoard(value: unknown): QuoteBoard {
   const quoteIds = new Set(quotes.map(quote => quote.id))
   if (reviews.some(review => !quoteIds.has(review.quoteId))) throw new Error('澄清记录关联的报价版本不存在。')
   assertUniqueQuoteReviews(reviews)
-  return { revision: row.revision, vendors, quotes, reviews, references: records(row.references === undefined ? [] : row.references, parseQuoteReference) }
+  const decisions = records(row.decisions === undefined ? [] : row.decisions, parseDecision)
+  if (decisions.some(d => d.comparedQuoteIds.some(id => !quoteIds.has(id)))) throw new Error('选商决定关联的报价版本不存在。')
+  return { revision: row.revision, vendors, quotes, reviews, decisions, references: records(row.references === undefined ? [] : row.references, parseQuoteReference) }
 }
 
-export const quoteCollections = ['vendors', 'quotes', 'references', 'reviews'] as const
+export const quoteCollections = ['vendors', 'quotes', 'references', 'reviews', 'decisions'] as const
 export type QuoteCollection = typeof quoteCollections[number]
 export class QuoteConflict extends Error {}
 
@@ -81,7 +85,8 @@ export function changeQuoteBoard(board: QuoteBoard, value: unknown): QuoteBoard 
   const collection = quoteCollections.find(name => name === raw.collection)
   if (!collection || !Number.isSafeInteger(raw.expectedRevision) || Number(raw.expectedRevision) < 0)
     throw new Error('请指定记录类型和读取时的档案版本。')
-  const record = quoteObject(raw.record)
+  const supplied = quoteObject(raw.record)
+  const record = collection === 'decisions' ? { ...freezeDecision(board, supplied) } : supplied
   const previous = board[collection].find(item => item.id === record.id)
   const rows = previous ? board[collection].map(item => item.id === record.id ? record : item) : [...board[collection], record]
   const next = parseQuoteBoard({ ...board, [collection]: rows, revision: board.revision + 1 })
