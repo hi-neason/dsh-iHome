@@ -135,3 +135,21 @@ test('底稿可从主会话确认，报价专家读取该要求并识别整份�
   assert.equal((await f.read({}, specialist)).scopeItems[0].source, scope.source)
   assert.match(JSON.stringify((await f.read({ quoteId: 'q1' }, specialist)).audit.questions), /业主清单第3项/)
 })
+
+test('网上评价须确认，按公司回查；同名公司隔离且复查保留原报告', async () => {
+  const f = fixture()
+  for (const id of ['v1','v2']) await f.propose('vendors', { ...firstVendor, id })
+  const report = { id:'r1', vendorId:'v1', company:firstVendor.name, city:'重庆', branch:'北店', date:'2026-11-27',
+    summary:'商家披露保修承诺。', limitations:'只有商家原文。', questions:['是否有维修工单？'],
+    sources:[{ title:'商家说明', url:'https://example.org/north', kind:'merchant', identity:'matched', basis:'公司名和门店地址相符',
+      accessed:'2026-11-27', excerpt:'保修期间可联系门店。' }] }
+  await assert.rejects(f.propose('research', { ...report, company:'别家公司' }), /名称/)
+  assert.equal((await f.propose('research', report)).status, 'applied')
+  assert.match(f.questions.at(-1).detail, /https:\/\/example\.org\/north[\s\S]*保修期间可联系门店/)
+  assert.equal((await f.propose('research', report, 0)).status, 'unchanged')
+  await assert.rejects(f.propose('research', { ...report, summary:'新结论' }), /另存/)
+  assert.equal((await f.read({ vendorId:'v2' })).research.length, 0)
+  assert.equal((await f.read({ vendorId:'v1' })).research[0].sources[0].identity, 'matched')
+  await f.propose('research', { ...report, id:'r2', sources:[], summary:'本次未取得原文。' })
+  assert.deepEqual((await f.read({ vendorId:'v1' })).research.map(r => r.id), ['r1','r2'])
+})

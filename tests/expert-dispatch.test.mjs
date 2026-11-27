@@ -41,6 +41,7 @@ test('durable provider identity selects independent expert permissions and survi
     assert.equal(allowedExpertTools(restored).has('ihome_review_design'), role === 'ihome-floorplan-designer')
     assert.equal(allowedExpertTools(restored).has('ihome_read_design'), role === 'ihome-floorplan-designer')
     assert.equal(allowedExpertTools(restored).has('ihome_read_quotes'), role === 'ihome-quotes-analyst')
+    for (const tool of ['web_search', 'web_fetch']) assert.equal(allowedExpertTools(restored).has(tool), role === 'ihome-quotes-analyst')
     assert.equal(allowedExpertTools(restored).has('ihome_read_quote_source'), role === 'ihome-quotes-analyst')
     assert.equal(allowedExpertTools(restored).has('ihome_read_tasks'), role === 'ihome-task-assistant')
     for (const name of ['ihome_propose_quote', 'ihome_propose_design_decision', 'ihome_propose_design', 'ihome_propose_task', 'ihome_propose_record', 'ihome_propose_need', 'ihome_consult_expert', 'bash']) {

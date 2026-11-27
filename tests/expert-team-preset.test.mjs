@@ -91,7 +91,7 @@ test('each role sees its own prompt and skills, with child writes and recursive 
     [root, EXPERT_TEAM_SETTINGS_ID, ['ihome-team-coordination']],
     [child('ihome-needs-expert'), NEEDS_ANALYST_PRESET_ID, ['ihome-needs-interview', 'ihome-needs-review']],
     [child('ihome-floorplan-expert'), 'ihome-floorplan-designer', ['ihome-floorplan-review', 'ihome-floorplan-modeling']],
-    [child('ihome-quotes-expert'), 'ihome-quotes-analyst', ['ihome-quote-analysis']],
+    [child('ihome-quotes-expert'), 'ihome-quotes-analyst', ['ihome-quote-analysis', 'ihome-vendor-research']],
     [child('ihome-task-expert'), TASK_ASSISTANT_PRESET_ID, ['ihome-task-planning', 'ihome-task-review']],
   ]) {
     f.update(id, { instructions: '设置属于' + id })

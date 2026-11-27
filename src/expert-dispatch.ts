@@ -39,7 +39,8 @@ export const coordinatorTools: ReadonlySet<string> = new Set(['skill', 'ihome_re
 const needsTools = new Set(['skill', 'ihome_read_archive'])
 const taskTools = new Set(['skill', 'ihome_read_archive', 'ihome_read_tasks'])
 const designerTools = new Set(['skill', 'ihome_read_archive', 'ihome_read_design', 'ihome_read_design_reference', 'ihome_review_design'])
-const quotesTools = new Set(['skill', 'ihome_read_archive', 'ihome_read_quotes', 'ihome_read_quote_source'])
+export const researchWebTools = ['web_search', 'web_fetch'] as const
+const quotesTools = new Set([...researchWebTools, 'skill', 'ihome_read_archive', 'ihome_read_quotes', 'ihome_read_quote_source'])
 const noTools = new Set<string>()
 export function allowedExpertTools(context: IHomeToolContext): ReadonlySet<string> {
   if (!isIHomeToolContext(context)) return noTools

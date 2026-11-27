@@ -1,3 +1,4 @@
+import { parseVendorResearch, type QuoteVendorResearch } from './vendor-research.ts'
 import { parseQuoteDocument, documentVersionKey, type QuoteDocument } from './quote-documents.ts'
 import { assertUniqueScopeKeys, parseQuoteScopeItem, type QuoteScopeItem } from './quote-scope.ts'
 import { freezeDecision, parseDecision, type QuoteDecision } from './quote-decision.ts'
@@ -19,6 +20,7 @@ export interface QuoteVendor {
 }
 
 export interface QuoteBoard {
+  research: QuoteVendorResearch[]
   revision: number
   documents: QuoteDocument[]
   vendors: QuoteVendor[]
@@ -64,6 +66,8 @@ export function parseQuoteBoard(value: unknown): QuoteBoard {
   const vendors = records(row.vendors, parseVendor)
   const quotes = records(row.quotes === undefined ? [] : row.quotes, parseQuoteVersion)
   const vendorIds = new Set(vendors.map(vendor => vendor.id))
+  const research = records(row.research === undefined ? [] : row.research, parseVendorResearch)
+  if (research.some(report => !vendorIds.has(report.vendorId))) throw new Error('调研报告关联的公司不存在。')
   const documents = records(row.documents === undefined ? [] : row.documents, parseQuoteDocument)
   if (documents.some(doc => !vendorIds.has(doc.vendorId)) || new Set(documents.map(documentVersionKey)).size !== documents.length)
     throw new Error('公司资料所属团队不存在或同名资料版本重复。')
@@ -82,10 +86,10 @@ export function parseQuoteBoard(value: unknown): QuoteBoard {
   assertUniqueScopeKeys(scopeItems)
   const decisions = records(row.decisions === undefined ? [] : row.decisions, parseDecision)
   if (decisions.some(d => d.comparedQuoteIds.some(id => !quoteIds.has(id)))) throw new Error('选商决定关联的报价版本不存在。')
-  return { revision: row.revision, documents, vendors, quotes, reviews, decisions, scopeItems, references: records(row.references === undefined ? [] : row.references, parseQuoteReference) }
+  return { revision: row.revision, research, documents, vendors, quotes, reviews, decisions, scopeItems, references: records(row.references === undefined ? [] : row.references, parseQuoteReference) }
 }
 
-export const quoteCollections = ['vendors', 'quotes', 'references', 'reviews', 'decisions', 'scopeItems'] as const
+export const quoteCollections = ['vendors', 'quotes', 'references', 'reviews', 'decisions', 'scopeItems', 'research'] as const
 export type QuoteCollection = typeof quoteCollections[number]
 export class QuoteConflict extends Error {}
 
@@ -105,6 +109,11 @@ export function changeQuoteBoard(board: QuoteBoard, value: unknown): QuoteBoard 
   if (raw.expectedRevision !== board.revision) throw new QuoteConflict('选商档案已有更新，请刷新并核对后再保存。')
   if (previous && collection === 'reviews' && 'quoteId' in previous && previous.quoteId !== record.quoteId)
     throw new Error('已有澄清记录不能换到另一份报价。')
+  if (collection === 'research') {
+    if (previous) throw new Error('调研报告已归档，复查请另存新报告。')
+    if (board.vendors.find(v => v.id === record.vendorId)?.name !== record.company)
+      throw new Error('调研报告中的公司名称与所选档案不符。')
+  }
   if (previous && collection === 'quotes') throw new Error('报价原版已保存，请另存新版本。')
   return next
 }

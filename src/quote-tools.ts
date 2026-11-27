@@ -7,8 +7,9 @@ import { changeQuoteBoard, QuoteConflict, quoteCollections, quoteObject, type Qu
 import { quoteStatusLabels } from './quote-version.ts'
 
 const output: ArchiveTool['output'] = { schema: {}, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] }
-const recordTypes: Record<QuoteCollection, string> = { vendors: '候选团队', scopeItems: '业主询价底稿', quotes: '报价版本', references: '参照单价', reviews: '商家澄清', decisions: '选商决定' }
+const recordTypes: Record<QuoteCollection, string> = { research: '网上评价调研', vendors: '候选团队', scopeItems: '业主询价底稿', quotes: '报价版本', references: '参照单价', reviews: '商家澄清', decisions: '选商决定' }
 const fieldNames: Record<string, string> = {
+  company: '调研时的公司名称', branch: '门店或区域', summary: '发现', limitations: '局限', questions: '待问问题', sources: '原文依据',
   id: '记录编号', name: '团队名称', city: '城市', contact: '联系方式', scope: '承包范围', credentials: '资质核验',
   visit: '考察记录', source: '出处', vendorId: '团队', version: '版本名称', date: '日期', statedTotal: '原报总额（元）',
   lines: '报价分项', key: '对齐项', label: '原项目名称', unit: '计量单位', quantity: '工程量', unitPrice: '单价（元）',
@@ -28,6 +29,11 @@ function describe(record: unknown, board: QuoteBoard): string {
   function lines(row: Record<string, unknown>): string[] {
     return Object.entries(row).flatMap(([key, value]): string[] => {
       const label = fieldNames[key] ?? key
+      if (key === 'sources' && Array.isArray(value)) return value.map((s, index) => {
+        const ref = quoteObject(s)
+        return [`[${index + 1}] ${ref.title} · ${ref.url}`, String(ref.excerpt), `${ref.kind} · ${ref.identity} · ${ref.basis}`,
+          `署名 ${ref.author || '未披露'} · 发布 ${ref.published || '未披露'} · 查阅 ${ref.accessed}`].join('\n')
+      })
       if (key === 'lines' && Array.isArray(value)) {
         return [`共 ${value.length} 条报价分项`, ...value.flatMap((entry, index) => ['分项 ' + (index + 1), ...lines(quoteObject(entry)), ''])]
       }
@@ -80,6 +86,7 @@ function readQuotes(board: QuoteBoard, raw: unknown) {
   const keys = new Set(quotes.flatMap(quote => quote.lines.map(line => line.key)))
   const relevantDecisions = 'vendorId' in query ? decisions.filter(item => item.comparedQuoteIds.some(id => quoteIds.has(id))) : decisions
   return { revision: board.revision, vendors,
+    research: board.research.filter(r => !('vendorId' in query) || r.vendorId === query.vendorId).map(r => 'vendorId' in query ? r : { id: r.id, vendorId: r.vendorId, date: r.date, company: r.company, branch: r.branch }),
     documents:board.documents.filter(doc => !('vendorId' in query) || doc.vendorId === query.vendorId).map(quoteDocumentInfo), scopeItems: board.scopeItems, quotes: quotes.map(quote => {
     if (!compact && JSON.stringify(quote).length <= 12000) return quote
     const { lines, ...metadata } = quote
@@ -97,6 +104,7 @@ const recordDescription = [
   'scopeItems: id,key(与报价分项一致),label,unit,quantity(未知为null),spec,source(图纸或业主确认范围出处)。',
   'references: id,key,city,date(YYYY-MM-DD),source,unit,spec,scope,unitPrice(元)。',
   'reviews: id,quoteId,topic,question,source,answer,answerSource,status(open/answered)；未答复时两个答复字段为空串，已答复须有原文及来源。',
+  'research: id,vendorId,company(档案名),city,branch,date(YYYY-MM-DD),summary,limitations,questions(字符串数组),sources(已打开的原文数组，可空)。每条来源含 title,url,kind(owner/merchant/official/other),identity(matched/uncertain/other-branch),basis(归属依据),author,published,accessed(YYYY-MM-DD),excerpt。复查另存新 id。',
   'decisions: id,quoteId(业主选中的版本),comparedQuoteIds(包含选中项，每家一版),reason(取舍依据)。宿主生成冻结报告。仅在业主已选定版本时提出。',
 ].join('\n')
 

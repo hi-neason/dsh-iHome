@@ -10,6 +10,8 @@
         plugins:
           - id: ihome-native-tools
             name: '@deepseek-ai/dsh-tool-executor-native'
+          - id: ihome-research-web
+            name: '@deepseek-ai/dsh-tool-web'
           - id: ihome-needs-analyst
             name: dsh-ihome/expert-team-preset
           - id: ihome-skill-tool
