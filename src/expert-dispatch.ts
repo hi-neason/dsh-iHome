@@ -35,11 +35,11 @@ export function expertRole(context: IHomeToolContext): IHomeAgentRole {
   return (Object.keys(expertProviders) as ExpertRole[]).find(role => expertProviders[role] === descriptor.provider) ?? 'unsupported'
 }
 
-export const coordinatorTools: ReadonlySet<string> = new Set(['skill', 'ihome_read_archive', 'ihome_propose_need', 'ihome_propose_record', 'ihome_read_tasks', 'ihome_propose_task', 'ihome_read_design', 'ihome_read_design_reference', 'ihome_propose_design', 'ihome_review_design', 'ihome_propose_design_decision', 'ihome_read_quotes', 'ihome_propose_quote', CONSULT_EXPERT_TOOL])
+export const coordinatorTools: ReadonlySet<string> = new Set(['skill', 'ihome_read_archive', 'ihome_propose_need', 'ihome_propose_record', 'ihome_read_tasks', 'ihome_propose_task', 'ihome_read_design', 'ihome_read_design_reference', 'ihome_propose_design', 'ihome_review_design', 'ihome_propose_design_decision', 'ihome_read_quotes', 'ihome_read_quote_source', 'ihome_propose_quote', CONSULT_EXPERT_TOOL])
 const needsTools = new Set(['skill', 'ihome_read_archive'])
 const taskTools = new Set(['skill', 'ihome_read_archive', 'ihome_read_tasks'])
 const designerTools = new Set(['skill', 'ihome_read_archive', 'ihome_read_design', 'ihome_read_design_reference', 'ihome_review_design'])
-const quotesTools = new Set(['skill', 'ihome_read_archive', 'ihome_read_quotes'])
+const quotesTools = new Set(['skill', 'ihome_read_archive', 'ihome_read_quotes', 'ihome_read_quote_source'])
 const noTools = new Set<string>()
 export function allowedExpertTools(context: IHomeToolContext): ReadonlySet<string> {
   if (!isIHomeToolContext(context)) return noTools
@@ -123,13 +123,14 @@ export function mountExpertDispatch(ctx: ExpertDispatchContext): void {
 
 
 /** Forward the current visible user message's native image/file references on ordinary tool dispatch. */
-function currentUserAttachments(agent: NonNullable<IHomeToolContext['agent']>): ExpertContentBlock[] {
+export function currentUserAttachments(agent: NonNullable<IHomeToolContext['agent']>): ExpertContentBlock[] {
   const session = agent.session as SessionIdentity & { surface?: { nodes: readonly number[] } }
-  const visible = new Set(session.surface?.nodes ?? [])
+  if (!session.surface) return []
+  const visible = new Set(session.surface.nodes)
   const events = session.snapshotEvents?.() ?? []
   for (let index = events.length - 1; index >= 0; index--) {
     const event = events[index] as { seq?: number, type: string, data: unknown }
-    if (event.type !== 'user/message' || (session.surface && !visible.has(event.seq!))) continue
+    if (event.type !== 'user/message' || !visible.has(event.seq!)) continue
     const message = event.data as { source?: { kind: string }, content?: ExpertContentBlock[] }
     if (message.source?.kind !== 'user') continue
     return (message.content ?? []).filter(block => block.type === 'image' || block.type === 'file')
