@@ -14,3 +14,6 @@
 .ih-design:fullscreen > * { margin-bottom:12px; }
 .ih-design-versions { display:grid; gap:7px; }
 .ih-design details > summary { cursor:pointer; }
+.ih-reference-points { position:relative; line-height:0; }
+.ih-reference-points img { width:100%; height:auto; cursor:crosshair; }
+.ih-reference-points i { position:absolute; width:10px; height:10px; border:2px solid white; border-radius:50%; background:#d34e2b; transform:translate(-50%,-50%); pointer-events:none; }

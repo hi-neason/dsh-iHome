@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { DesignVersions } from './DesignVersions'
 import { DesignSpace } from './DesignSpace'
-import { DesignPlan } from './DesignPlan'
+import { ReferencedPlan, DesignReferenceEditor } from './DesignReference'
+import type { ArchiveService } from './archive-model'
 import { ArchiveDialog } from './ArchiveDialog'
 import { loadDesigns, changeDesign } from './design-client'
 import type { DesignCommand, DesignFloor, DesignModel, DesignState } from './design-model'
@@ -33,7 +34,7 @@ function FloorEditor({ floor, elevation, busy, error, save, close }: {
   </ArchiveDialog>
 }
 
-export function DesignWorkbench({ onAsk }: { onAsk: (prompt: string) => void }) {
+export function DesignWorkbench({ onAsk, archive }: { archive: ArchiveService, onAsk: (prompt: string) => void }) {
   const [state, setState] = useState<DesignState>()
   const [versionId, setVersionId] = useState('')
   const [floorId, setFloorId] = useState('')
@@ -140,7 +141,9 @@ export function DesignWorkbench({ onAsk }: { onAsk: (prompt: string) => void }) 
         setSelectedId(id)
         const level = model.floors.find(value => [...value.walls, ...value.openings, ...value.items, ...(value.assets ?? [])].some(element => element.id === id))
         if (level) setFloorId(level.id)
-      }} /> : <DesignPlan key={version?.id ?? scheme.id} model={model} floorId={floor.id} selectedId={selectedId} onSelect={setSelectedId} onChange={replace} readonly={!!version} />}
+      }} /> : <ReferencedPlan key={version?.id ?? scheme.id} model={model} floorId={floor.id} selectedId={selectedId} onSelect={setSelectedId} onChange={replace} readonly={!!version} />}
+    <DesignReferenceEditor key={scheme.id + ':' + floor.id + ':' + (version?.id ?? state.revision)} floor={floor} archive={archive}
+      disabled={busy || !!version} save={reference => replace({ ...model, floors: model.floors.map(level => level.id === floor.id ? { ...level, reference } : level) })} />
     {editor?.revision === state.revision && <FloorEditor error={error} floor={editor.kind === 'edit' ? floor : undefined}
       elevation={Math.max(...model.floors.map(level => level.elevation + level.height))}
       busy={busy} close={() => setEditor(null)} save={async next => {

@@ -51,7 +51,7 @@ export function ModuleWorkbench({ id, archiveService, taskService, onAsk, onOpen
       }} /></nav> : id === 'archive'
         ? <FamilyArchive service={archiveService} onAsk={onAsk} />
         : id === 'documents' ? <DocumentLibrary service={archiveService} />
-        : id === 'design' ? <DesignWorkbench onAsk={onAsk} />
+        : id === 'design' ? <DesignWorkbench archive={archiveService} onAsk={onAsk} />
         : id === 'tasks' ? <TaskWorkbench service={taskService} onAsk={onAsk} />
         : <ModuleDetail key={id} id={id} onAsk={onAsk} />}
     </div>
