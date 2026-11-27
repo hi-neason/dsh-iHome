@@ -24,11 +24,13 @@ function select(state: DesignState, designId: unknown, versionId?: unknown) {
   return { design, version, model: version?.model ?? design.model }
 }
 function metrics(model: DesignModel) {
+  const structuredFloors = model.floors.filter(floor => !floor.source)
   return {
+    sourceFloors: model.floors.filter(floor => Boolean(floor.source)).map(floor => floor.id),
     floors: model.floors.length,
-    roomArea: model.floors.reduce((sum, floor) => sum + floor.items.filter(item => item.kind === 'room').reduce((n, item) => n + item.width * item.depth, 0), 0),
-    wallLength: model.floors.reduce((sum, floor) => sum + floor.walls.reduce((n, wall) => n + Math.hypot(wall.x2 - wall.x1, wall.z2 - wall.z1), 0), 0),
-    furniture: model.floors.reduce((sum, floor) => sum + floor.items.filter(item => item.kind === 'furniture').length, 0),
+    roomArea: structuredFloors.length !== model.floors.length ? null : structuredFloors.reduce((sum, floor) => sum + floor.items.filter(item => item.kind === 'room').reduce((n, item) => n + item.width * item.depth, 0), 0),
+    wallLength: structuredFloors.length !== model.floors.length ? null : structuredFloors.reduce((sum, floor) => sum + floor.walls.reduce((n, wall) => n + Math.hypot(wall.x2 - wall.x1, wall.z2 - wall.z1), 0), 0),
+    furniture: structuredFloors.length !== model.floors.length ? null : structuredFloors.reduce((sum, floor) => sum + floor.items.filter(item => item.kind === 'furniture').length, 0),
   }
 }
 /** Separating-axis test for positive-area overlap; touching edges are not collisions. */
@@ -47,17 +49,21 @@ export function reviewDesign(state: DesignState, archive: Archive, raw: unknown)
   const args = object(raw)
   if (Object.keys(args).some(key => !['designId', 'versionId', 'compareDesignId', 'compareVersionId'].includes(key))) throw new Error('未知评审参数。')
   const selected = select(state, args.designId, args.versionId)
-  const rooms = selected.model.floors.flatMap(floor => floor.items.filter(item => item.kind === 'room').map(item => ({ floorId: floor.id, ...item })))
+  const rooms = selected.model.floors.filter(floor => !floor.source).flatMap(floor => floor.items.filter(item => item.kind === 'room').map(item => ({ floorId: floor.id, ...item })))
   const issues: { kind: string, floorId?: string, objectIds: string[], message: string }[] = []
   for (const room of rooms) if (room.roomId && !archive.rooms.some(item => item.id === room.roomId)) issues.push({ kind: 'unknown-room', floorId: room.floorId, objectIds: [room.id], message: '关联的家庭档案房间已不存在，请重新关联。' })
   for (const floor of selected.model.floors) {
+    if (floor.source) {
+      issues.push({ kind: 'source-review-required', floorId: floor.id, objectIds: [floor.id], message: '该层由 Three.js 源码生成；请读取 source 和实际视图评审，不能用旧结构化墙体、房间或家具推断满足程度。自动面积、墙长、碰撞检查不覆盖此层。' })
+      continue
+    }
     const furniture = floor.items.filter(item => item.kind === 'furniture')
     for (let i = 0; i < furniture.length; i++) for (let j = i + 1; j < furniture.length; j++) {
       if (overlaps(furniture[i], furniture[j])) issues.push({ kind: 'furniture-overlap', floorId: floor.id, objectIds: [furniture[i].id, furniture[j].id], message: `${furniture[i].name}与${furniture[j].name}的平面占地重叠；核实是否为允许的上下叠放，否则调整位置。` })
     }
     for (const item of floor.items.filter(item => item.kind === 'stair')) {
       const target = selected.model.floors.find(other => other.id === item.targetFloorId)
-      if (target && !target.items.some(room => room.kind === 'room' && overlaps(item, room))) issues.push({ kind: 'stair-landing', floorId: floor.id, objectIds: [item.id], message: `通往${target.name}的楼梯占地没有接入该层任何房间楼板，请核实位置与落点。渲染器会自动生成楼梯洞口，现场洞口及净高仍须实测核验。` })
+      if (target && !target.source && !target.items.some(room => room.kind === 'room' && overlaps(item, room))) issues.push({ kind: 'stair-landing', floorId: floor.id, objectIds: [item.id], message: `通往${target.name}的楼梯占地没有接入该层任何房间楼板，请核实位置与落点。渲染器会自动生成楼梯洞口，现场洞口及净高仍须实测核验。` })
     }
   }
   const needs = archive.needs.map(need => ({ id: need.id, title: need.title, priority: need.priority, quote: need.quote,
@@ -70,10 +76,10 @@ export function reviewDesign(state: DesignState, archive: Archive, raw: unknown)
   const baseline = comparison ? metrics(comparison.model) : undefined
   const report = {
     revision: state.revision, archiveRevision: archive.revision, designId: selected.design.id, designName: selected.design.name,
-    metrics: current, metricsNote: '面积为模型矩形房间占地之和，未扣除重叠及墙体，不是建筑面积；模型数量及长度不证明功能满足或施工合规。',
+    metrics: current, metricsNote: '源码楼层不参与以下结构化几何统计，不能把未覆盖部分的零值视为空房或改善；面积为模型矩形房间占地之和，未扣除重叠及墙体，不是建筑面积；模型数量及长度不证明功能满足或施工合规。',
     needs, measurements: archive.measurements, issues,
     comparison: comparison && baseline ? { designId: comparison.design.id, designName: comparison.design.name, baseline,
-      delta: { floors: current.floors - baseline.floors, roomArea: current.roomArea - baseline.roomArea, wallLength: current.wallLength - baseline.wallLength, furniture: current.furniture - baseline.furniture },
+      delta: { floors: current.floors - baseline.floors, roomArea: current.roomArea === null || baseline.roomArea === null ? null : current.roomArea - baseline.roomArea, wallLength: current.wallLength === null || baseline.wallLength === null ? null : current.wallLength - baseline.wallLength, furniture: current.furniture === null || baseline.furniture === null ? null : current.furniture - baseline.furniture },
       objects: compareDesignModels(comparison.model, selected.model) } : undefined,
     limits: ['未自动验证承重、采光、消防、楼梯净高及通道净宽。', '几何问题为待核验线索，不能直接视为违规。', '请用需求编号、模型对象编号与尺寸来源逐项说明满足、冲突或未知，并给出可测量的下一步。'],
   }
@@ -88,7 +94,7 @@ export async function prepareDesignDecision(state: DesignState, archive: Archive
   const versionId = args.versionId === undefined ? undefined : text(args.versionId, '历史版本编号')
   const selected = select(state, text(args.designId, '方案编号'), versionId)
   const objectIds = ids(args.objectIds ?? [])
-  const modelIds = new Set(selected.model.floors.flatMap(floor => [floor.id, ...floor.walls.map(item => item.id), ...floor.openings.map(item => item.id), ...floor.items.map(item => item.id), ...(floor.assets ?? []).map(item => item.id)]))
+  const modelIds = new Set(selected.model.floors.flatMap(floor => [floor.id, ...(floor.source ? [] : [...floor.walls.map(item => item.id), ...floor.openings.map(item => item.id), ...floor.items.map(item => item.id)]), ...(floor.assets ?? []).map(item => item.id)]))
   if (objectIds.some(id => !modelIds.has(id))) throw new Error('决定关联的模型对象不存在。')
   const source = { designId: selected.design.id, designName: selected.design.name, capturedAt: new Date().toISOString(),
     ...(selected.version ? { versionId: selected.version.id, versionName: selected.version.name } : {}),

@@ -58,7 +58,7 @@ test('public design tools expose named schemes without snapshots or version fiel
   assert.equal(Object.hasOwn(current, 'versionId'), false)
   assert.equal(Object.hasOwn(current.designs[0], 'versions'), false)
   assert.equal(Object.hasOwn(f.tools.ihome_read_design.parameters.properties, 'versionId'), false)
-  assert.deepEqual(f.tools.ihome_propose_design.parameters.properties.action.enum, ['create', 'edit', 'copy', 'rename', 'activate'])
+  assert.deepEqual(f.tools.ihome_propose_design.parameters.properties.action.enum, ['create', 'edit', 'copy', 'rename', 'activate', 'undo'])
   await assert.rejects(f.tools.ihome_propose_design.execute({ action: 'snapshot', expectedRevision: 0 }, execution()))
   await f.tools.ihome_propose_design.execute({ action: 'copy', expectedRevision: 0, name: '客厅留白方案' }, execution())
   const copied = await f.tools.ihome_read_design.execute({}, execution())
@@ -78,4 +78,73 @@ test('renaming a scheme requires confirmation and preserves its geometry', async
   const name = declined.state().designs[0].name
   assert.equal((await declined.tools.ihome_propose_design.execute({ action: 'rename', expectedRevision: 0, name: '不应保存' }, execution())).status, 'not_applied')
   assert.equal(declined.state().designs[0].name, name)
+})
+
+const sourceA = 'export function buildFloor(THREE) { const group = new THREE.Group(); const wall = new THREE.Mesh(new THREE.BoxGeometry(4, 2.8, 0.15), new THREE.MeshStandardMaterial({color: 0xeeeeee})); wall.name = "客厅北墙"; wall.position.set(0, 1.4, -2); group.add(wall); return group; }'
+const sourceB = sourceA.replace('BoxGeometry(4,', 'BoxGeometry(5,')
+test('source edits replace only targeted floor geometry and retain references, assets and other floors', () => {
+  const state = createDesignState(), floor = state.designs[0].model.floors[0]
+  floor.walls = [{ id: 'old-wall', name: '旧墙', x1: 0, z1: 0, x2: 3, z2: 0, thickness: .2 }]
+  floor.reference = { assetId: 'sha256:' + 'a'.repeat(64), name: '原图', x: 0, z: 0, width: 10, depth: 8 }
+  const other = { id: 'other', name: '二楼', elevation: 3, height: 2.8, walls: [], openings: [], items: [] }
+  state.designs[0].model.floors.push(other)
+  const { command } = prepareDesignProposal(state, { action: 'edit', expectedRevision: 0, operations: [{ entity: 'floor', action: 'upsert', id: floor.id, value: { source: sourceA } }] })
+  assert.equal(command.model.floors[0].source, sourceA)
+  assert.deepEqual(command.model.floors[0].walls, [])
+  assert.deepEqual(command.model.floors[0].reference, floor.reference)
+  assert.deepEqual(command.model.floors[1], other)
+  assert.equal(floor.walls.length, 1)
+})
+test('confirmed source create and second edit persist actual code and undo restores it', async () => {
+  const f = await fixture()
+  await f.tools.ihome_propose_design.execute({ action: 'create', expectedRevision: 0, name: '按图估算', model: { floors: [{ id: 'floor', name: '一楼', elevation: 0, height: 2.8, walls: [], openings: [], items: [], source: sourceA }] } }, execution())
+  const designId = f.state().activeId
+  const found = () => f.state().designs.find(d => d.id === designId)
+  assert.equal(found().model.floors[0].source, sourceA)
+  await f.tools.ihome_propose_design.execute({ action: 'edit', expectedRevision: 1, designId, operations: [{ entity: 'floor', action: 'upsert', id: 'floor', value: { source: sourceB } }] }, execution())
+  assert.equal(found().model.floors[0].source, sourceB)
+  await f.tools.ihome_propose_design.execute({ action: 'undo', expectedRevision: 2, designId }, execution())
+  assert.equal(found().model.floors[0].source, sourceA)
+  const { command } = prepareDesignProposal(f.state(), { action: 'edit', expectedRevision: 3, designId, operations: [{ entity: 'floor', action: 'upsert', id: 'floor', value: { elevation: 1 } }] })
+  assert.equal(command.model.floors[0].source, sourceA)
+  assert.equal(command.model.floors[0].elevation, 1)
+  assert.throws(() => prepareDesignProposal(f.state(), { action: 'edit', expectedRevision: 3, designId, operations: [{ entity: 'wall', action: 'remove', floorId: 'floor', id: 'old-wall' }] }), /源码/)
+})
+
+test('source confirmation is readable, identifies actual floors and replacement, and never prints source', () => {
+  const state = createDesignState(), floor = state.designs[0].model.floors[0]
+  floor.walls = [{ id: 'wall', name: '旧墙', x1: 0, z1: 0, x2: 3, z2: 0, thickness: .2 }]
+  const edit = prepareDesignProposal(state, { action: 'edit', expectedRevision: 0, description: '按附图生成客厅，门宽暂按90厘米估算。', operations: [{ entity: 'floor', action: 'upsert', id: floor.id, value: { source: sourceA } }] })
+  assert.ok(edit.summary.includes(floor.name))
+  assert.ok(edit.summary.includes(floor.id))
+  assert.match(edit.summary, /将替换本层原有 1 面墙/)
+  assert.match(edit.summary, /90厘米估算/)
+  assert.equal(edit.summary.includes('buildFloor'), false)
+  assert.equal(edit.summary.includes('BoxGeometry'), false)
+  const withSource = applyDesignCommand(state, edit.command)
+  const height = prepareDesignProposal(withSource, { action: 'edit', expectedRevision: 1, operations: [{ entity: 'floor', action: 'upsert', id: floor.id, value: { elevation: 3 } }] })
+  assert.match(height.summary, /标高：0 → 3 米/)
+  assert.equal(height.summary.includes('buildFloor'), false)
+  const created = prepareDesignProposal(state, { action: 'create', expectedRevision: 0, name: '新命名方案', model: { floors: [{ ...floor, walls: [], source: sourceA }] } })
+  assert.ok(created.summary.startsWith('方案：新命名方案'))
+  assert.match(created.summary, /新增楼层/)
+  assert.equal(created.summary.includes('buildFloor'), false)
+  assert.throws(() => prepareDesignProposal(state, { action: 'create', expectedRevision: 0, description: 'x'.repeat(501) }), /500/)
+})
+
+test('existing imported assets can move, rotate and be removed without changing their content address', () => {
+  let state = createDesignState(), floor = state.designs[0].model.floors[0]
+  floor.source = sourceA
+  floor.assets = [{ id: 'imported', name: '原模型', assetId: 'sha256:' + 'a'.repeat(64), x: 0, y: 0, z: 0, scale: 1, rotation: 0 }]
+  const op = { entity: 'asset', action: 'upsert', floorId: floor.id, id: 'imported', value: { name: '客厅家具', x: 2, y: .1, z: 3, scale: 1.2, rotation: 90 } }
+  const proposal = prepareDesignProposal(state, { action: 'edit', expectedRevision: 0, operations: [op] })
+  const changed = proposal.command.model.floors[0]
+  assert.equal(changed.assets[0].assetId, floor.assets[0].assetId)
+  assert.equal(changed.assets[0].rotation, 90)
+  assert.equal(changed.source, sourceA)
+  for (const invalid of [{ ...op, id: 'missing' }, { ...op, value: { assetId: 'sha256:' + 'b'.repeat(64) } }]) assert.throws(() => prepareDesignProposal(state, { action: 'edit', expectedRevision: 0, operations: [invalid] }))
+  state = applyDesignCommand(state, proposal.command)
+  const removal = prepareDesignProposal(state, { action: 'edit', expectedRevision: 1, operations: [{ entity: 'asset', action: 'remove', floorId: floor.id, id: 'imported' }] })
+  assert.deepEqual(removal.command.model.floors[0].assets, [])
+  assert.equal(removal.command.model.floors[0].source, sourceA)
 })

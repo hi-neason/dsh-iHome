@@ -75,6 +75,7 @@ export function mountExpertRequests(ctx: ExpertRequestContext): void {
       if (message.source?.kind !== 'user') continue
       const request = parseExpertRequest(messageText(message))
       if (!request) continue
+      if (!request.task && request.expert === 'ihome-floorplan-designer' && message.content.some(block => block.type === 'image')) request.task = '请根据这张户型图为当前方案生成可编辑的 Three.js 楼层模型；缺少尺寸时明确估算依据。'
       let report = cache.get(message.id)
       if (report === undefined) {
         if (!request.task) {

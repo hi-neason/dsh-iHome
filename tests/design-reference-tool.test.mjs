@@ -39,7 +39,7 @@ test('rejects unknown selectors and missing references before reading media',asy
   const f=fixture()
   for(const args of [{},{floorId:'absent'},{floorId:'first',designId:'absent'},{floorId:'first',versionId:'absent'},{floorId:'first',path:'/tmp/a'},{floorId:'first',designId:3}]) await assert.rejects(f.tool.execute(args,f.execution))
   delete f.state.designs[0].model.floors[0].reference
-  await assert.rejects(f.tool.execute({floorId:'first'},f.execution),/尚未上传/)
+  await assert.rejects(f.tool.execute({floorId:'first'},f.execution),/可以直接使用当前对话中的户型图片/)
   assert.equal(f.reads.length,0)
 })
 test('rejects non-image data and propagates decode and media errors',async()=>{

@@ -16,3 +16,5 @@ description: 对照真实家庭需求和模型评审布局、比较命名方案�
 需要落实备选时，由主 Agent 用 copy 新建方案，再通过局部 operations 修改，原方案保留。子专家只读并返回可执行建议。正式采纳具体做法时，直接把 designId、needIds、objectIds、采纳理由和需要替代的 supersedesId 交给主 Agent，由 ihome_propose_design_decision 在对话确认后写入正式装修决定，工具自动记录采纳时间、几何摘要和指纹，后续修改方案不覆盖原决定的来源。未收到 applied 与 decisionId 不能说已采纳或已记录。
 
 待补量事项交任务待办助理，每项包含位置、相关楼层/对象 ID、要测的量及单位、为什么影响当前设计、完成判断依据。截止日期来自业主，未知则未排期。用现有 ihome_read_tasks 查重，再由主会话 ihome_propose_task 提议创建；不要把评审报告当成已保存的任务。
+
+楼层存在 source 时，它的实际几何来自 Three.js 源码，旧 walls/openings/items 不再代表显示效果。先读取源码、原图与实际视图评审；工具会提示结构化统计不覆盖源码楼层，零值不是空房、面积收益或满足需求的证据。采纳关联楼层 ID，源码会纳入模型指纹。

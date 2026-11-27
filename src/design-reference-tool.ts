@@ -50,7 +50,7 @@ export function createDesignReferenceTool(access: DesignReferenceAccess) {
       const floor = (version?.model ?? design.model).floors.find(value => value.id === args.floorId)
       if (!floor) throw new Error('指定楼层不存在。')
       const reference = floor.reference
-      if (!reference) throw new Error('该楼层尚未上传并校准底图。请在工作台上传，或在当前对话附图并说明尺寸。')
+      if (!reference) throw new Error('该楼层没有已保存的底图。可以直接使用当前对话中的户型图片。')
       const media = await access.readMedia(reference.assetId, execution.signal)
       execution.signal.throwIfAborted()
       if (!['image/png', 'image/jpeg', 'image/webp'].includes(media.mime)) throw new Error('底图素材不是支持的图片。')

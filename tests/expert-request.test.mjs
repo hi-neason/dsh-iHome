@@ -121,3 +121,17 @@ test('commands on later lines and child conversations never trigger direct routi
   await f.step([message('child', '/需求分析师 问题')])
   assert.equal(f.calls.length, 0)
 })
+
+test('image-only designer selection starts modeling while other empty expert selections still clarify', async () => {
+  const f = fixture()
+  const input = message('image-only', '/户型设计师')
+  const image = { type: 'image', attachment: { attachmentId: 'sha256:' + 'a'.repeat(64), mediaType: 'image/png', width: 10, height: 10, bytes: 100 } }
+  input.content.push(image)
+  await f.step([input])
+  assert.equal(f.calls.length, 1)
+  assert.match(f.calls[0].prompt[0].text, /Three.js/)
+  assert.deepEqual(f.calls[0].prompt[1], image)
+  const other = message('other-image', '/需求分析师'); other.content.push(image)
+  await f.step([other])
+  assert.equal(f.calls.length, 1)
+})

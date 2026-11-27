@@ -112,3 +112,15 @@ test('decision works with no snapshots, records geometry at acceptance, and reta
     assert.equal(tool.description.includes('snapshot'), false)
   }
 })
+
+test('source floors never reuse obsolete structured geometry for automated review', () => {
+  const { state, archive } = fixture()
+  state.designs[0].model.floors[0].source = 'export function buildFloor(THREE) { return new THREE.Group(); }'
+  const report = reviewDesign(state, archive, {})
+  assert.equal(report.metrics.roomArea, null)
+  assert.equal(report.metrics.furniture, null)
+  assert.equal(report.metrics.sourceFloors.length, 1)
+  assert.deepEqual(report.needs[0].rooms[0].modelObjectIds, [])
+  assert.deepEqual(report.issues.map(issue => issue.kind), ['source-review-required'])
+  assert.match(report.metricsNote, /未覆盖/)
+})

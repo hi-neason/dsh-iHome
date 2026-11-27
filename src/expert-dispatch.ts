@@ -118,6 +118,21 @@ export function mountExpertDispatch(ctx: ExpertDispatchContext): void {
 }
 
 
+/** Forward the current visible user message's native image/file references on ordinary tool dispatch. */
+function currentUserAttachments(agent: NonNullable<IHomeToolContext['agent']>): ExpertContentBlock[] {
+  const session = agent.session as SessionIdentity & { surface?: { nodes: readonly number[] } }
+  const visible = new Set(session.surface?.nodes ?? [])
+  const events = session.snapshotEvents?.() ?? []
+  for (let index = events.length - 1; index >= 0; index--) {
+    const event = events[index] as { seq?: number, type: string, data: unknown }
+    if (event.type !== 'user/message' || (session.surface && !visible.has(event.seq!))) continue
+    const message = event.data as { source?: { kind: string }, content?: ExpertContentBlock[] }
+    if (message.source?.kind !== 'user') continue
+    return (message.content ?? []).filter(block => block.type === 'image' || block.type === 'file')
+  }
+  return []
+}
+
 /** Shared entry for model tool calls and explicit user expert commands. */
 export async function consultExpert(
   ctx: Pick<ExpertDispatchContext, 'subagents'>,
@@ -142,7 +157,7 @@ export async function consultExpert(
     activation = await ctx.subagents.startActivation({
       provider, childId, label: expertNames[expert], parent: execution.agent,
       ...(!isIHomeCoordinator(execution) ? { agentPreset: IHOME_TEAM_PRESET_ID } : {}),
-      signal: execution.signal, prompt: [{ type: 'text', text }, ...structuredClone(options.attachments ?? [])], delivery: 'caller', maxDepth: 1,
+      signal: execution.signal, prompt: [{ type: 'text', text }, ...structuredClone(options.attachments ?? currentUserAttachments(execution.agent))], delivery: 'caller', maxDepth: 1,
     })
   } finally {
     pendingStarts.delete(childId)

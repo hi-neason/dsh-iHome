@@ -1,25 +1,39 @@
 ---
 name: ihome-floorplan-modeling
-description: 结合家庭需求，通过对话生成和修改可编辑的平面与3D户型，支持平层、复式和别墅。
+description: 从对话文字或普通户型附图生成、修改并保存可编辑的 Three.js 楼层源码。
 ---
 
-# 对话户型设计
+# 对话源码建模
 
-先用 ihome_read_design 读取当前方案目录、选中方案及其 revision。讨论某个命名方案时明确指定 designId。按当前房间或区域用 ihome_read_archive 查询家人的需求、采信的尺寸和原始资料。档案里的房间 ID 可以写入对应 room 对象的 roomId，保留关联。
+先 ihome_read_design 读取当前命名方案及各楼层 source。按需 ihome_read_archive 查看家人需求。直接使用本轮附图和文字，不要求 GLB、事先上传底图或校准。已校准底图可由 ihome_read_design_reference 读取。图纸无尺度时说明采用的估算（例如门宽假设），提供能调整的草模；不把推测当实测，不据图纸颜色判定承重。
 
-从用户提供的图纸或描述建立草模。对已校准底图，调用 ihome_read_design_reference，传入 designId、floorId。使用工具返回的原图与左上角坐标、实际宽深一并识图。若当前模型无法读取图片，请向业主索取关键尺寸。核对图纸楼层、比例、门窗位置和尺寸来源。原图缺少可靠尺度时说明假设，并请用户提供一段关键实测长度；可以按已说明的假设生成待校准草模。图纸颜色和墙体粗细不足以证明承重性质。资料模糊处列出待确认点，不编造精确尺寸。
+每个楼层 source 是自包含字符串，格式为 `export function buildFloor(THREE) { ... return group; }`。必须输出实际源码，而非“已生成”或待执行说明。局部 x/z 为平面，y 为高度，单位米；楼层 elevation 在渲染时统一应用，源码不要再次叠加标高。
 
-模型以米为单位，x/z 是平面，elevation 是楼层标高，height 是层高。平面和3D共用同一份模型。每层包含 walls、openings 和 items。
+支持的语法与 API：
+- const/let 变量；new THREE.Group、Mesh、BoxGeometry、PlaneGeometry、SphereGeometry、CylinderGeometry、ConeGeometry、TorusGeometry。
+- MeshStandardMaterial、MeshBasicMaterial、MeshLambertMaterial、MeshPhongMaterial；可在 Mesh 参数中内联 new。
+- group.add(...objects)；position/rotation/scale.set(...)、scale.setScalar(...)；position/rotation/scale.x/y/z 赋值；name、castShadow、receiveShadow 赋值。
+- 数值 + - * /、Math.PI、十六进制颜色。材质对象字段 color、roughness、metalness、opacity、transparent、wireframe、side（THREE.DoubleSide 等）。
+- 无循环、导入、任意函数、eval 或网络资源。把重复物件写为显式声明和 add；每个物件用 name 标注用途。
 
-- 墙包含 id、name、x1、z1、x2、z2、thickness。
-- 门窗包含 id、name、wallId、kind（door/window）、offset、width、sill、height。offset 沿墙起点到终点量至洞口起边，门 sill 通常为 0。
-- 空间或物件包含 id、name、kind（room/furniture/stair/void）、x、z、width、depth、height、rotation。x/z 表示中心，rotation 单位为度。roomId 可关联家庭档案空间。
-- stair 用 targetFloorId 连接目标楼层，void 表示该层楼板开口。检查楼梯到达位置及上下层开口对应关系。
+例如一面墙：
+```javascript
+export function buildFloor(THREE) {
+  const group = new THREE.Group();
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(4, 2.8, 0.15), new THREE.MeshStandardMaterial({ color: 0xe6dfd3, roughness: 0.8 }));
+  wall.name = "客厅北墙";
+  wall.position.set(0, 1.4, -2);
+  group.add(wall);
+  return group;
+}
+```
 
-给空白方案生成完整 model。已有模型用稳定 ID 表达局部操作，按 entity（floor/wall/opening/item）、action（upsert/remove）、floorId、id 和 value 修改。upsert 的 value 只包含要改变的字段，创建楼层需提供 name/elevation/height，创建其他对象需提供完整几何字段。删除墙前明确处理关联门窗，删除楼层前处理指向它的楼梯。不得意外替换其他楼层、家具、参考底图或外部模型。
+门窗开口用门洞两侧和上方多个墙块构成，避免实墙遮住洞口；多层通过各自 elevation/height 和源码台阶表达空间关系。缺少楼梯净高和洞口尺寸时注明待核验。用不同命名物件表达家具、窗框等可调整细节。
 
-例如用户要求桌子转 90 度，先读取桌子原 rotation，再给出它所在 floorId、对象 id 和新 rotation。移动门窗时同步检查洞口是否仍落在墙长与层高范围内。改变墙端点会影响附着门窗的位置，需要说明影响。多处修改合成一批 operations，以同一个读取 revision 提交，避免半完成状态。
+创建方案返回 model.floors，每层 id/name/elevation/height/source，walls/openings/items 为 []。编辑已有方案时先读源码，再用 operations:[{entity:"floor", action:"upsert", id:楼层ID, value:{source:完整修改后源码}}]。此操作替代该层旧结构化墙、门窗与 items，保留 reference/assets 及无关楼层；只改标高时 value 仅给 elevation。不要全量重画其他楼层。撤销上次模型修改用 undo；探索另一布局用 copy，重命名用 rename。
 
-用户探索另一种布局时，建议从已有方案 copy 出独立的命名方案，使用名称区分不同布局。修改方案名称使用 rename，提供 designId、name 和最新 expectedRevision，经主会话确认后保存。正式采用某种装修做法时，向主 Agent 提交决定及理由，由主对话处理采纳。
+子专家返回实际 source/operations、designId、读取 revision、来源与估算依据。主 Agent 用 ihome_propose_design 在当前对话确认后直接写入，读取 applied 才能宣称保存。补量事项说明位置、单位及设计影响，交任务待办助理。采纳做法用 ihome_propose_design_decision，关联方案并自动保存采纳时的来源。
 
-作为子专家，把可执行建议、读取 revision、designId、依据和待澄清问题交回主 Agent。主 Agent 使用 ihome_propose_design 展示实际改动，业主接受后保存到本机。查看实际结果后再声称已保存。需要补量或核验时，写清位置、测量目的和会影响哪项设计，交给任务待办助理安排。
+已有打开的命名方案（即使楼层空白）时，首轮按图生成也使用 edit 修改当前楼层；只有用户明确要另建方案或没有方案时使用 create。提交时可用 description 简明描述实际变化和估算依据，不贴源码；工具会另外列出真实受影响楼层与动作供业主确认。
+
+已有导入 GLB/旧工程素材不是可推测的源码。读取对应 floor.assets 后，用 entity:"asset"、floorId、既有实例 id、action:"upsert"、value 中的 name/x/y/z/scale/rotation 调整，或 action:"remove" 移除实例。存储 assetId 保持原样，不创建新实例、不伪造几何源码代替原素材。源码楼层也可调整其保留素材。

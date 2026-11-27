@@ -202,3 +202,18 @@ test('named providers require a host-minted start ticket even for an eligible ro
   assert.equal(result.status, 'completed')
   await assert.rejects(f.providers[1].prepareContinuable({ sessionId: result.childSessionId, parent: root.agent, signal: root.signal }), /主 Agent/)
 })
+
+test('ordinary model delegation forwards current visible native images without reviving hidden or previous uploads', async () => {
+  const f = fixture(), root = context()
+  const image = { type: 'image', attachment: { attachmentId: 'sha256:' + 'a'.repeat(64), mediaType: 'image/png', bytes: 100, width: 10, height: 10 } }
+  root.events.push({ seq: 1, type: 'user/message', data: { source: { kind: 'user' }, content: [{ type: 'text', text: '按图建模' }, image] } },
+    { seq: 2, type: 'user/message', data: { source: { kind: 'user' }, content: [{ type: 'image', attachment: { attachmentId: 'hidden' } }] } })
+  root.agent.session.surface = { nodes: [1] }
+  await f.tool.execute({ expert: 'ihome-floorplan-designer', task: '按图建模' }, root)
+  assert.deepEqual(f.calls[0].prompt.slice(1), [image])
+  assert.notEqual(f.calls[0].prompt[1], image)
+  root.events.push({ seq: 3, type: 'user/message', data: { source: { kind: 'user' }, content: [{ type: 'text', text: '换个名称' }] } })
+  root.agent.session.surface.nodes.push(3)
+  await f.tool.execute({ expert: 'ihome-floorplan-designer', task: '换个名称' }, root)
+  assert.equal(f.calls[1].prompt.length, 1)
+})
