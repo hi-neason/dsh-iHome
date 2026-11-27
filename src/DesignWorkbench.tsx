@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { DesignVersions } from './DesignVersions'
+import { DesignProjectFiles } from './DesignProjectFiles'
 import { DesignAssets } from './DesignAssets'
 import { loadDesignAssets } from './design-glb'
 import { DesignSpace } from './DesignSpace'
@@ -147,6 +148,11 @@ export function DesignWorkbench({ onAsk, archive }: { archive: ArchiveService, o
     <DesignReferenceEditor key={scheme.id + ':' + floor.id + ':' + (version?.id ?? state.revision)} floor={floor} archive={archive}
       disabled={busy || !!version} save={reference => replace({ ...model, floors: model.floors.map(level => level.id === floor.id ? { ...level, reference } : level) })} />
     <DesignAssets key={scheme.id + floor.id} model={model} floorId={floor.id} readonly={busy || !!version} onChange={replace} />
+    <DesignProjectFiles scheme={scheme} disabled={busy} onImport={async design => {
+      const ok = await apply({ action: 'import', design })
+      if (ok) { viewVersion(''); setFloorId('') }
+      return ok
+    }} />
     {editor?.revision === state.revision && <FloorEditor error={error} floor={editor.kind === 'edit' ? floor : undefined}
       elevation={Math.max(...model.floors.map(level => level.elevation + level.height))}
       busy={busy} close={() => setEditor(null)} save={async next => {
