@@ -2,6 +2,7 @@ import type { ArchiveHostContext } from './archive-host'
 import { allowedExpertTools, currentUserAttachments } from './expert-dispatch.ts'
 import type { DesignReferenceAccess } from './design-reference-tool'
 import type { IHomeToolContext } from './ihome-workspace-path'
+import { canRenderMacQuotePdf, renderMacQuotePdf } from './quote-pdf-macos'
 import { createQuoteSourceTool, type QuoteFileRef, type QuoteOfficeRequest, type QuoteOfficeResult } from './quote-source-tool.ts'
 
 export interface QuoteSourceHost {
@@ -36,9 +37,10 @@ export function mountQuoteSources(ctx: QuoteSourceHost): void {
       return data
     },
     render(request, signal) {
+      if (canRenderMacQuotePdf(request.extension)) return renderMacQuotePdf(request, signal)
       const kit = ctx.get('officeKit')
       if (!kit) throw new Error('当前 DSH 未加载 Office 文档服务，可以提供页图或粘贴报价表格。')
-      return kit.renderImages(request, signal)
+      return kit.renderImages(request, AbortSignal.any([signal, AbortSignal.timeout(60_000)]))
     },
     saveImage: input => ctx.attachments.saveImage(input),
   })
