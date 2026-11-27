@@ -3,6 +3,7 @@ import { FamilyArchive } from './FamilyArchive'
 import { DocumentLibrary } from './DocumentLibrary'
 import { TaskWorkbench } from './TaskWorkbench'
 import type { TaskService } from './task-client'
+import { DesignWorkbench } from './DesignWorkbench'
 import { ModuleDetail } from './ModuleDetail'
 import { ModuleTiles, AgentPortrait, type OpenModule } from './ModuleTiles'
 import { modules, type ModuleId } from './modules'
@@ -50,6 +51,7 @@ export function ModuleWorkbench({ id, archiveService, taskService, onAsk, onOpen
       }} /></nav> : id === 'archive'
         ? <FamilyArchive service={archiveService} onAsk={onAsk} />
         : id === 'documents' ? <DocumentLibrary service={archiveService} />
+        : id === 'design' ? <DesignWorkbench />
         : id === 'tasks' ? <TaskWorkbench service={taskService} onAsk={onAsk} />
         : <ModuleDetail key={id} id={id} onAsk={onAsk} />}
     </div>

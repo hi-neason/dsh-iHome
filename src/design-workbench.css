@@ -1,0 +1,12 @@
+.ih-design { display:grid; gap:12px; color:inherit; min-width:0; }
+.ih-design-heading,.ih-design-bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.ih-design-heading { justify-content:space-between; border-bottom:1px solid color-mix(in srgb,currentColor 18%,transparent); padding:0 0 8px; }
+.ih-design-heading h2 { margin:0; font-size:1.05rem; font-weight:650; }
+.ih-design button,.ih-design select,.ih-design input,.ih-design-form input,.ih-design-form button { font:inherit; color:inherit; }
+.ih-design :is(button,select),.ih-design-form :is(input,button) { padding:.35em .65em; border:1px solid color-mix(in srgb,currentColor 25%,transparent); border-radius:6px; background:Canvas; color:CanvasText; }
+.ih-design button:not(:disabled),.ih-design-form button { cursor:pointer; }
+.ih-design button[aria-pressed=true] { background:CanvasText; color:Canvas; }
+.ih-design-form fieldset { display:grid; gap:12px; border:0; }
+.ih-design-form label { display:grid; gap:4px; }
+.ih-design-caption,.ih-design-heading span { font-size:.85em; opacity:.78; margin:0; }
+.ih-design [role=alert] { color:light-dark(#a02e19,#ffb09c); margin:0; }
