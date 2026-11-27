@@ -6,17 +6,17 @@ import css from './design-space.css'
 export interface DesignSpaceProps {
   model: DesignModel
   floorId: string
-  selectedId: string | null
-  onSelect(id: string | null): void
+  mode: 'plan' | 'space'
   allFloors: boolean
   loadAssets?: DesignAssetLoader
 }
 
-export function DesignSpace({ model, floorId, selectedId, onSelect, allFloors, loadAssets }: DesignSpaceProps) {
+export function DesignSpace({ model, floorId, mode, allFloors, loadAssets }: DesignSpaceProps) {
+  const stage = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const scene = useRef<ReturnType<typeof mountDesignScene>>()
-  const latest = useRef({ model, floorId, selectedId, onSelect, allFloors, loadAssets })
-  latest.current = { model, floorId, selectedId, onSelect, allFloors, loadAssets }
+  const latest = useRef({ model, floorId, mode, allFloors, loadAssets })
+  latest.current = { model, floorId, mode, allFloors, loadAssets }
   const [error, setError] = useState('')
   const [ready, setReady] = useState(false)
   const [attempt, setAttempt] = useState(0)
@@ -26,22 +26,33 @@ export function DesignSpace({ model, floorId, selectedId, onSelect, allFloors, l
     setReady(false)
     void import('./design-scene').then(({ mountDesignScene }) => {
       if (!active || !canvas.current) return
-      scene.current = mountDesignScene(canvas.current, id => latest.current.onSelect(id), message => { if (active) setError(message) })
+      scene.current = mountDesignScene(canvas.current, message => { if (active) setError(message) })
       const value = latest.current
       scene.current.update(value.model, value, value.loadAssets)
       setReady(true)
     }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : '无法启动 3D 显示。') })
     return () => { active = false; scene.current?.dispose(); scene.current = undefined }
   }, [attempt])
-  useEffect(() => { scene.current?.update(model, { floorId, selectedId, allFloors }, loadAssets) }, [model, floorId, selectedId, allFloors, loadAssets])
-  return <section className="ih-design-space" aria-label="房屋三维模型">
+  useEffect(() => { scene.current?.update(model, { floorId, mode, allFloors }, loadAssets) }, [model, floorId, mode, allFloors, loadAssets])
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement === stage.current) await document.exitFullscreen()
+      else await stage.current?.requestFullscreen()
+    } catch { setError('当前窗口无法切换全屏。') }
+  }
+  return <section className="ih-design-space" aria-label={mode === 'plan' ? '房屋平面模型' : '房屋三维模型'}>
     <style>{css}</style>
-    <div className="ih-design-space-stage">
-      <canvas ref={canvas} aria-label="可旋转缩放的房屋立体图，拖动旋转，右键拖动平移，滚轮缩放" />
-      {ready && <button className="ih-design-space-fit" type="button" onClick={() => scene.current?.fit()}>适应画布</button>}
-      {!ready && !error && <p className="ih-design-space-status" role="status">正在加载立体模型…</p>}
-      {error && <div className="ih-design-space-status" role="alert"><p>{error}</p><button type="button" onClick={() => setAttempt(value => value + 1)}>重新加载 3D</button></div>}
+    <div ref={stage} className="ih-design-space-stage">
+      <canvas ref={canvas} aria-label={mode === 'plan' ? '正交俯视平面图，拖动平移，滚轮缩放' : '房屋立体图，拖动旋转，右键平移，滚轮缩放'} />
+      {ready && <div className="ih-design-space-fit">
+        <button type="button" aria-label="放大模型" onClick={() => scene.current?.zoom(1.25)}>＋</button>
+        <button type="button" aria-label="缩小模型" onClick={() => scene.current?.zoom(.8)}>−</button>
+        <button type="button" onClick={() => scene.current?.fit()}>适应画布</button>
+        {document.fullscreenEnabled && <button type="button" onClick={toggleFullscreen}>切换全屏</button>}
+      </div>}
+      {!ready && !error && <p className="ih-design-space-status" role="status">正在加载模型…</p>}
+      {error && <div className="ih-design-space-status" role="alert"><p>{error}</p><button type="button" onClick={() => setAttempt(value => value + 1)}>重新加载模型</button></div>}
     </div>
-    <p className="ih-design-space-hint">拖动旋转 · 右键拖动平移 · 滚轮缩放 · 点击选择对象</p>
+    <p className="ih-design-space-hint">{mode === 'plan' ? '正交俯视 · 拖动平移 · 滚轮缩放' : '拖动旋转 · 右键平移 · 滚轮缩放'}</p>
   </section>
 }

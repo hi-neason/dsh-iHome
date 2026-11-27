@@ -1,3 +1,4 @@
+import { validateFloorSource } from './design-source.ts'
 /** Editable geometry shared by the local host, the two views and project files.
  * Coordinates and dimensions are metres. The plan uses x/z, with elevation on y. */
 export interface DesignWall {
@@ -68,14 +69,16 @@ export interface DesignFloor {
   items: DesignItem[]
   reference?: DesignReference
   assets?: DesignAsset[]
+  /** Self-contained restricted Three.js buildFloor function; replaces primitive geometry. */
+  source?: string
 }
 
 export interface DesignModel { floors: DesignFloor[] }
 export interface DesignVersion { id: string, name: string, model: DesignModel, createdAt: string }
-export interface DesignScheme { id: string, name: string, model: DesignModel, versions: DesignVersion[], legacyVersion?: { designId: string, versionId: string } }
+export interface DesignScheme { id: string, name: string, model: DesignModel, versions: DesignVersion[], previousModel?: DesignModel, legacyVersion?: { designId: string, versionId: string } }
 export interface DesignState { revision: number, activeId: string, designs: DesignScheme[] }
 export interface DesignCommand {
-  action: 'replace' | 'create' | 'copy' | 'rename' | 'activate' | 'import'
+  action: 'replace' | 'create' | 'copy' | 'rename' | 'undo' | 'activate' | 'import'
   expectedRevision: number
   designId?: string
   versionId?: string
@@ -166,13 +169,19 @@ function asset(raw: unknown): DesignAsset {
   }
 }
 function floor(raw: unknown): DesignFloor {
-  const value = record(raw, '楼层', ['id', 'name', 'elevation', 'height', 'walls', 'openings', 'items', 'reference', 'assets'])
+  const value = record(raw, '楼层', ['id', 'name', 'elevation', 'height', 'walls', 'openings', 'items', 'reference', 'assets', 'source'])
   const result = {
     id: text(value.id, '楼层编号'), name: text(value.name, '楼层名称'),
     elevation: number(value.elevation, '楼层标高', -1000, 1000), height: number(value.height, '层高', 0.1, 100),
     walls: list(value.walls, '墙体', wall), openings: list(value.openings, '门窗', opening), items: list(value.items, '空间构件', item),
     ...(value.reference === undefined ? {} : { reference: reference(value.reference) }),
     ...(value.assets === undefined ? {} : { assets: list(value.assets, '三维素材', asset, 1000) }),
+    ...(value.source === undefined ? {} : { source: value.source as string }),
+  }
+  if (value.source !== undefined) {
+    if (typeof value.source !== 'string') throw new Error('楼层源码必须是文字。')
+    validateFloorSource(value.source)
+    if (result.walls.length || result.openings.length || result.items.length) throw new Error('源码楼层不能同时包含旧墙体、门窗或构件。')
   }
   const walls = new Map(result.walls.map(wall => [wall.id, wall]))
   for (const hole of result.openings) {
@@ -213,11 +222,12 @@ function version(raw: unknown): DesignVersion {
   return { id: text(value.id, '版本编号'), name: text(value.name, '版本名称'), model: validateDesignModel(value.model), createdAt }
 }
 export function validateDesignScheme(raw: unknown): DesignScheme {
-  const value = record(raw, '设计方案', ['id', 'name', 'model', 'versions', 'legacyVersion'])
+  const value = record(raw, '设计方案', ['id', 'name', 'model', 'versions', 'legacyVersion', 'previousModel'])
   const versions = list(value.versions, '历史版本', version, 1000)
   unique(versions, '历史版本')
   const legacy = value.legacyVersion === undefined ? undefined : record(value.legacyVersion, '旧版来源', ['designId', 'versionId'])
   return { id: text(value.id, '方案编号'), name: text(value.name, '方案名称'), model: validateDesignModel(value.model), versions,
+    ...(value.previousModel === undefined ? {} : { previousModel: validateDesignModel(value.previousModel) }),
     ...(legacy ? { legacyVersion: { designId: text(legacy.designId, '原方案编号'), versionId: text(legacy.versionId, '原版本编号') } } : {}) }
 
 }
@@ -265,7 +275,7 @@ export function migrateDesignVersions(raw: DesignState): DesignState {
 
 export function parseDesignCommand(raw: unknown): DesignCommand {
   const value = record(raw, '设计操作', ['action', 'expectedRevision', 'designId', 'versionId', 'name', 'model', 'design'])
-  if (!['replace', 'create', 'copy', 'rename', 'activate', 'import'].includes(value.action as string)) throw new Error('设计操作无效。')
+  if (!['replace', 'create', 'copy', 'rename', 'undo', 'activate', 'import'].includes(value.action as string)) throw new Error('设计操作无效。')
   const action = value.action as DesignCommand['action']
   const designId = value.designId === undefined ? undefined : text(value.designId, '方案编号')
   const versionId = value.versionId === undefined ? undefined : text(value.versionId, '版本编号')
@@ -273,6 +283,7 @@ export function parseDesignCommand(raw: unknown): DesignCommand {
   if ((action === 'create' || action === 'import') && designId !== undefined) throw new Error('新建方案由系统分配编号。')
   if (versionId !== undefined && action !== 'copy' && action !== 'activate') throw new Error('此操作不支持指定历史版本。')
   if (value.model !== undefined && action !== 'replace' && action !== 'create') throw new Error('此操作不接受新的户型模型。')
+  if (action === 'undo' && value.name !== undefined) throw new Error('撤销操作不接受名称。')
   if (action === 'rename' && value.name === undefined) throw new Error('请提供新的方案名称。')
   if (action === 'replace' && value.model === undefined) throw new Error('请提供完整的户型模型。')
   if (action === 'import' && value.design === undefined) throw new Error('请提供要导入的设计方案。')
@@ -316,8 +327,16 @@ export function applyDesignCommand(current: DesignState, raw: unknown): DesignSt
       break
     }
     case 'replace':
-      source!.model = command.model!
+      if (JSON.stringify(source!.model) !== JSON.stringify(command.model)) {
+        source!.previousModel = structuredClone(source!.model)
+        source!.model = command.model!
+      }
       if (command.name !== undefined) source!.name = command.name
+      break
+    case 'undo':
+      if (!source!.previousModel) throw new Error('该方案没有可撤销的模型修改。')
+      source!.model = structuredClone(source!.previousModel)
+      delete source!.previousModel
       break
     case 'rename':
       source!.name = command.name!

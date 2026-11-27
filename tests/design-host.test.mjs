@@ -85,3 +85,20 @@ test('rename endpoint applies exactly one concurrent CAS update without replacin
   assert.deepEqual(f.state().designs[0].model,initial.designs[0].model)
   assert.equal(f.state().designs[0].versions.length,0)
 })
+
+test('undo restores the exact last changed model after host restart and consumes saved history', async () => {
+  const first=await fixture(), initial=first.service.read(), original=structuredClone(initial.designs[0].model)
+  const model=structuredClone(original)
+  model.floors[0].source='export function buildFloor(THREE) { const group = new THREE.Group(); return group; }'
+  const saved=await first.service.change({action:'replace',expectedRevision:0,designId:initial.activeId,model})
+  assert.deepEqual(saved.designs[0].previousModel,original)
+  await first.cleanup()
+  const restarted=await fixture(undefined,JSON.parse(JSON.stringify(saved)))
+  assert.equal((await restarted.http({action:'undo',expectedRevision:0,designId:initial.activeId})).status,409)
+  const response=await restarted.http({action:'undo',expectedRevision:1,designId:initial.activeId})
+  assert.equal(response.status,200)
+  const restored=await response.json()
+  assert.deepEqual(restored.designs[0].model,original)
+  assert.equal(restored.designs[0].previousModel,undefined)
+  assert.equal((await restarted.http({action:'undo',expectedRevision:2,designId:initial.activeId})).status,400)
+})

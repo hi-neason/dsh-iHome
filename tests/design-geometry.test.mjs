@@ -53,3 +53,24 @@ test('scene disposal releases shared geometry, materials, textures and bitmap on
   disposeDesignGroup(group)
   assert.deepEqual([closed, disposedGeometry, disposedMaterial, disposedTexture, group.children.length], [1, 1, 1, 1, 0])
 })
+
+test('source floor replaces legacy meshes while host owns elevation and level filtering', () => {
+  const lower = floor('ground', 0), upper = floor('upper', 4)
+  lower.source = `export function buildFloor(THREE) {
+    const group = new THREE.Group();
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 3), new THREE.MeshStandardMaterial({color: 0xff0000}));
+    mesh.position.set(7, 0.5, 8); group.add(mesh); return group;
+  }`
+  upper.source = lower.source
+  const group = buildDesignGroup({ floors: [lower, upper] })
+  assert.equal(group.children.length, 2)
+  assert.equal(group.children[0].children.length, 1, 'legacy room slab must be replaced')
+  assert.equal(group.children[0].children[0].children.length, 1)
+  const bounds = new THREE.Box3().setFromObject(group)
+  assert.equal(bounds.min.y, 0)
+  assert.equal(bounds.max.y, 5)
+  const single = buildDesignGroup({ floors: [lower, upper] }, { allFloors: false, floorId: 'upper', mode: 'plan' })
+  assert.equal(single.children.length, 1)
+  assert.equal(new THREE.Box3().setFromObject(single).min.y, 4)
+  disposeDesignGroup(group); disposeDesignGroup(single)
+})

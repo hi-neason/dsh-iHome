@@ -1,44 +1,14 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { DesignRoomLink } from './DesignRoomLink'
+import { useEffect, useRef, useState } from 'react'
 import { DesignList } from './DesignList'
-import { DesignProjectFiles } from './DesignProjectFiles'
-import { DesignAssets } from './DesignAssets'
-import { loadDesignAssets } from './design-glb'
 import { DesignSpace } from './DesignSpace'
-import { ReferencedPlan, DesignReferenceEditor } from './DesignReference'
-import type { ArchiveService } from './archive-model'
-import { ArchiveDialog } from './ArchiveDialog'
-import { loadDesigns, changeDesign } from './design-client'
-import type { DesignCommand, DesignFloor, DesignModel, DesignScheme, DesignState } from './design-model'
+import { changeDesign, loadDesigns } from './design-client'
+import { loadDesignAssets } from './design-glb'
+import type { DesignCommand, DesignScheme, DesignState } from './design-model'
 import css from './design-workbench.css'
 
 type EditCommand = Omit<DesignCommand, 'expectedRevision'>
-function FloorEditor({ floor, elevation, busy, error, save, close }: {
-  floor?: DesignFloor, elevation: number, busy: boolean, error: string,
-  save: (floor: DesignFloor) => Promise<boolean>, close: () => void,
-}) {
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const values = new FormData(event.currentTarget)
-    const next: DesignFloor = {
-      ...(floor ?? { id: crypto.randomUUID(), walls: [], openings: [], items: [] }),
-      name: String(values.get('name')).trim(), elevation: Number(values.get('elevation')),
-      height: Number(values.get('height')),
-    }
-    if (await save(next)) close()
-  }
-  return <ArchiveDialog title={floor ? '楼层设置' : '添加楼层'} busy={busy} onDismiss={close}>
-    <form className="ih-design-form" onSubmit={submit}><fieldset disabled={busy}>
-      <label>楼层名称<input name="name" required maxLength={80} defaultValue={floor?.name} placeholder="例如，二层或地下室" /></label>
-      <label>标高（米）<input name="elevation" type="number" step="any" required defaultValue={floor?.elevation ?? elevation} /></label>
-      <label>层高（米）<input name="height" type="number" min="0.1" step="any" required defaultValue={floor?.height ?? 3} /></label>
-      {error && <p role="alert">{error}</p>}
-      <button type="submit">保存楼层</button>
-    </fieldset></form>
-  </ArchiveDialog>
-}
 
-export function DesignWorkbench({ onAsk, archive }: { archive: ArchiveService, onAsk: (prompt: string) => void }) {
+export function DesignWorkbench({ onAsk }: { onAsk: (prompt: string) => void }) {
   const [state, setState] = useState<DesignState>()
   const [openedId, setOpenedId] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -92,88 +62,63 @@ export function DesignWorkbench({ onAsk, archive }: { archive: ArchiveService, o
       }
     }} />
   </section>
-  return <SchemeEditor key={scheme.id} scheme={scheme} revision={state.revision} busy={busy} error={error}
-    archive={archive} onAsk={onAsk} apply={apply} setError={setError} back={() => { setOpenedId(null); setError('') }} />
+  return <SchemeViewer key={scheme.id} scheme={scheme} busy={busy} error={error}
+    onAsk={onAsk} apply={apply} back={() => { setOpenedId(null); setError('') }} />
 }
 
-function SchemeEditor({ scheme, revision, busy, error, archive, onAsk, apply, back, setError }: {
-  scheme: DesignScheme, revision: number, busy: boolean, error: string, archive: ArchiveService,
-  onAsk(prompt: string): void, apply(command: EditCommand): Promise<boolean>, back(): void, setError(message: string): void,
+function SchemeViewer({ scheme, busy, error, onAsk, apply, back }: {
+  scheme: DesignScheme, busy: boolean, error: string, onAsk(prompt: string): void,
+  apply(command: EditCommand): Promise<boolean>, back(): void,
 }) {
-  const [floorId, setFloorId] = useState('')
-  const [editor, setEditor] = useState<{ kind: 'add' | 'edit', revision: number } | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [undo, setUndo] = useState<{ revision: number, model: DesignModel }>()
-  const [view, setView] = useState<'plan' | 'space'>('plan')
-  const [allFloors, setAllFloors] = useState(true)
-  const panel = useRef<HTMLElement>(null)
-  const model = scheme.model
+  const { model } = scheme
+  const hasGeometry = model.floors.some(floor =>
+    floor.source || floor.walls.length || floor.items.length || floor.assets?.length)
+  const hasContent = hasGeometry || model.floors.some(floor => floor.reference)
+  const [view, setView] = useState<'plan' | 'space'>(!hasGeometry && hasContent ? 'plan' : 'space')
+  const [floorId, setFloorId] = useState(() => model.floors.find(level => level.reference)?.id ?? model.floors[0].id)
+  const [whole, setWhole] = useState(true)
   const floor = model.floors.find(level => level.id === floorId) ?? model.floors[0]
-  const replace = async (value: DesignModel) => {
-    const saved = await apply({ action: 'replace', designId: scheme.id, model: value })
-    if (saved) setUndo({ revision: revision + 1, model })
-    return saved
+  const allFloors = view === 'space' && whole && model.floors.length > 1
+  const ask = () => {
+    const context = '方案「' + scheme.name + '」(' + scheme.id + ')'
+    const subject = allFloors ? context + '的整栋模型' : context + '的「' + floor.name + '」(' + floor.id + ')'
+    onAsk('/户型设计师 ' + (hasContent ? '我想调整' + subject + '：' :
+      '请根据我提供的户型图或布局描述，为' + context + '建立 Three.js 模型。'))
   }
-  const room = floor.items.find(item => item.id === selectedId && item.kind === 'room')
-  const canUndo = undo?.revision === revision
-  async function toggleFullscreen() {
-    try {
-      if (document.fullscreenElement === panel.current) await document.exitFullscreen()
-      else await panel.current?.requestFullscreen()
-    } catch { setError('当前窗口无法进入全屏。') }
-  }
-  return <section ref={panel} aria-busy={busy} className="ih-design" aria-label="户型设计工作台">
+  return <section className="ih-design ih-scheme-viewer" aria-label="户型方案预览" aria-busy={busy}>
     <style>{css}</style>
-    <header className="ih-design-heading"><button type="button" disabled={busy} onClick={back}>返回方案列表</button><h2>{scheme.name}</h2></header>
-    <div className="ih-design-bar">
-      <label>当前楼层 <select value={floor.id} onChange={e => { setFloorId(e.target.value); setSelectedId(null) }}>
-        {model.floors.map(level => <option key={level.id} value={level.id}>{level.name}</option>)}
-      </select></label>
-      <button disabled={busy} onClick={() => setEditor({ kind: 'edit', revision })}>楼层设置</button>
-      <button disabled={busy} onClick={() => setEditor({ kind: 'add', revision })}>添加楼层</button>
-    </div>
+    <header className="ih-design-heading ih-viewer-heading">
+      <button type="button" className="ih-design-back" disabled={busy} onClick={back}>‹ 返回方案列表</button>
+      <h2>{scheme.name}</h2>
+    </header>
     {error && <p role="alert">{error}</p>}
-    <p className="ih-design-caption">标高 {floor.elevation} m · 层高 {floor.height} m · {floor.walls.length} 面墙 · {floor.openings.length} 个门窗</p>
-    <div className="ih-design-bar">
-      <button type="button" disabled={busy || !canUndo} onClick={async () => {
-        if (canUndo && await apply({ action: 'replace', designId: scheme.id, model: undo.model })) setUndo(undefined)
-      }}>撤销上次编辑</button>
-      <button onClick={() => {
-        const element = [...floor.walls, ...floor.items, ...floor.openings, ...(floor.assets ?? [])].find(value => value.id === selectedId)
-        const context = [`方案「${scheme.name}」(${scheme.id})`,
-          `楼层「${floor.name}」(${floor.id})`, element && `对象「${element.name}」(${element.id})`].filter(Boolean).join('，')
-        onAsk('/户型设计师 ' + context + '。我想调整这里的设计：')
-      }}>与设计师讨论{selectedId ? '所选对象' : '本层'}</button>
-      <button onClick={() => onAsk('/户型设计师 请结合家庭档案中的家人、居住需求和实测尺寸，评审方案「' + scheme.name + '」(' + scheme.id + ')' +
-        '。指出使用冲突、可选布局和还需要实测的位置。')}>评审布局</button>
-      {document.fullscreenEnabled && <button type="button" onClick={toggleFullscreen}>切换全屏</button>}
-    </div>
-    <div role="group" aria-label="视图" className="ih-design-bar">
-      <button aria-pressed={view === 'plan'} onClick={() => setView('plan')}>平面图</button>
-      <button aria-pressed={view === 'space'} onClick={() => setView('space')}>3D 立体图</button>
-      {view === 'space' && <label><input type="checkbox" checked={allFloors} onChange={e => setAllFloors(e.target.checked)} /> 显示整栋</label>}
-    </div>
-    {view === 'space' ? <DesignSpace model={model} floorId={floor.id}
-      loadAssets={loadDesignAssets} allFloors={allFloors} selectedId={selectedId} onSelect={id => {
-        setSelectedId(id)
-        const level = model.floors.find(value => [...value.walls, ...value.openings, ...value.items, ...(value.assets ?? [])].some(element => element.id === id))
-        if (level) setFloorId(level.id)
-      }} /> : <ReferencedPlan model={model} floorId={floor.id} selectedId={selectedId} onSelect={setSelectedId} onChange={replace} />}
-    {room && <DesignRoomLink archive={archive} value={room.roomId} disabled={busy}
-      change={roomId => void replace({ ...model, floors: model.floors.map(level => level.id === floor.id ? {
-        ...level, items: level.items.map(item => item.id === room.id ? { ...item, roomId } : item),
-      } : level) })} />}
-    <DesignReferenceEditor key={'reference:' + floor.id + ':' + revision} floor={floor} archive={archive}
-      disabled={busy} save={reference => replace({ ...model, floors: model.floors.map(level => level.id === floor.id ? { ...level, reference } : level) })} />
-    <DesignAssets key={'assets:' + floor.id} model={model} floorId={floor.id} readonly={busy} onChange={replace} />
-    <DesignProjectFiles scheme={scheme} disabled={busy} />
-    {editor?.revision === revision && <FloorEditor error={error} floor={editor.kind === 'edit' ? floor : undefined}
-      elevation={Math.max(...model.floors.map(level => level.elevation + level.height))}
-      busy={busy} close={() => setEditor(null)} save={async next => {
-        const floors = editor.kind === 'add' ? [...model.floors, next] : model.floors.map(level => level.id === next.id ? next : level)
-        const saved = await replace({ ...model, floors })
-        if (saved) setFloorId(next.id)
-        return saved
-      }} />}
+    {hasContent ? <>
+      <div className="ih-viewer-tools">
+        <div className="ih-view-pair" role="group" aria-label="视图">
+          <button type="button" aria-pressed={view === 'plan'} onClick={() => setView('plan')}>平面图</button>
+          <button type="button" aria-pressed={view === 'space'} onClick={() => setView('space')}>3D 立体图</button>
+        </div>
+        {model.floors.length > 1 && <select aria-label="楼层" value={allFloors ? '' : floor.id} onChange={event => {
+          const id = event.target.value
+          if (id) setFloorId(id)
+          if (view === 'space') setWhole(!id)
+        }}>
+          {view === 'space' && <option value="">整栋</option>}
+          {model.floors.map(level => <option value={level.id} key={level.id}>{level.name}</option>)}
+        </select>}
+      </div>
+      <DesignSpace model={model} mode={view} allFloors={allFloors} floorId={floor.id} loadAssets={loadDesignAssets} />
+      <div className="ih-viewer-actions">
+        <button type="button" className="ih-design-chat" onClick={ask}>在会话中修改</button>
+        <button type="button" disabled={busy || !scheme.previousModel}
+          onClick={() => void apply({ action: 'undo', designId: scheme.id })}>撤销上次修改</button>
+      </div>
+    </> : <div className="ih-viewer-empty">
+      <h3>从一张户型图开始</h3>
+      <p>在会话里发一张户型图，或描述房屋布局。</p>
+      <button type="button" className="ih-design-chat" onClick={ask}>在会话中建模</button>
+      {scheme.previousModel && <button type="button" disabled={busy}
+        onClick={() => void apply({ action: 'undo', designId: scheme.id })}>撤销上次修改</button>}
+    </div>}
   </section>
 }

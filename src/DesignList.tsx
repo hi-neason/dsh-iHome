@@ -12,6 +12,7 @@ export function DesignList({ schemes, busy, error, open, change }: {
 }) {
   const [dialog, setDialog] = useState<{ action: NameAction, scheme?: DesignScheme }>()
   const [name, setName] = useState('')
+  const [expandedId, setExpandedId] = useState<string>()
   function editName(action: NameAction, scheme?: DesignScheme) {
     const suggested = action === 'copy' ? scheme!.name.slice(0, 156) + ' 副本' : scheme?.name ?? ''
     setName(suggested)
@@ -26,7 +27,12 @@ export function DesignList({ schemes, busy, error, open, change }: {
       <li key={scheme.id}>
         <button className="ih-scheme-name" disabled={busy} onClick={() => open(scheme.id)}>{scheme.name}</button>
         <button disabled={busy} aria-label={'复制 ' + scheme.name} onClick={() => editName('copy', scheme)}>复制</button>
-        <button disabled={busy} aria-label={'重命名 ' + scheme.name} onClick={() => editName('rename', scheme)}>重命名</button>
+        <button type="button" aria-label={scheme.name + '的更多操作'} aria-expanded={expandedId === scheme.id}
+          onClick={() => setExpandedId(expandedId === scheme.id ? undefined : scheme.id)}>更多</button>
+        {expandedId === scheme.id && <div className="ih-scheme-more">
+          <button disabled={busy} onClick={() => editName('rename', scheme)}>重命名</button>
+          <DesignProjectFiles disabled={busy} scheme={scheme} />
+        </div>}
       </li>)}</ul>
     {error && !dialog && <p role="alert">{error}</p>}
     {dialog && <ArchiveDialog title={titles[dialog.action]} busy={busy} onDismiss={() => setDialog(undefined)}>
