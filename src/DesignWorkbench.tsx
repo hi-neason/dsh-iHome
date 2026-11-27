@@ -33,7 +33,7 @@ function FloorEditor({ floor, elevation, busy, error, save, close }: {
   </ArchiveDialog>
 }
 
-export function DesignWorkbench() {
+export function DesignWorkbench({ onAsk }: { onAsk: (prompt: string) => void }) {
   const [state, setState] = useState<DesignState>()
   const [versionId, setVersionId] = useState('')
   const [floorId, setFloorId] = useState('')
@@ -122,6 +122,12 @@ export function DesignWorkbench() {
       <button type="button" disabled={busy || !!version || !canUndo} onClick={async () => {
         if (canUndo && await apply({ action: 'replace', designId: scheme.id, model: undo.model })) setUndo(undefined)
       }}>撤销上次编辑</button>
+      <button onClick={() => {
+        const element = [...floor.walls, ...floor.items, ...floor.openings, ...(floor.assets ?? [])].find(value => value.id === selectedId)
+        const context = [`方案「${scheme.name}」(${scheme.id})`, version && `历史版本「${version.name}」(${version.id})`,
+          `楼层「${floor.name}」(${floor.id})`, element && `对象「${element.name}」(${element.id})`].filter(Boolean).join('，')
+        onAsk('/户型设计师 ' + context + '。' + (version ? '请结合这个版本讨论备选设计。' : '我想调整这里的设计：'))
+      }}>与设计师讨论{selectedId ? '所选对象' : '本层'}</button>
       {document.fullscreenEnabled && <button type="button" onClick={toggleFullscreen}>切换全屏</button>}
     </div>
     <div role="group" aria-label="视图" className="ih-design-bar">

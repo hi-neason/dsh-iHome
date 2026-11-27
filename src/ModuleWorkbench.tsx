@@ -37,11 +37,11 @@ export function ModuleWorkbench({ id, archiveService, taskService, onAsk, onOpen
         </button>}
       </header>
       {sharedTeam && !showDirectory && <nav className="ih-team-workbench-tabs" aria-label="专家团工作台">
-        {(['archive', 'tasks'] as const).map(next => <button type="button" key={next}
+        {(['archive', 'design', 'tasks'] as const).map(next => <button type="button" key={next}
           aria-pressed={id === next} onClick={() => {
             setNavigationError('')
             void Promise.resolve(onOpenModule(next)).catch(error => setNavigationError(String(error.message ?? error)))
-          }}>{next === 'archive' ? '居住需求' : '任务待办'}</button>)}
+          }}>{next === 'archive' ? '居住需求' : next === 'design' ? '户型设计' : '任务待办'}</button>)}
       </nav>}
       {navigationError && <p role="alert">{navigationError}</p>}
       {!showDirectory && historyLinks?.map(link => <button key={link.label} className="ih-workbench-history" type="button" onClick={link.open}>{link.label}</button>)}
@@ -51,7 +51,7 @@ export function ModuleWorkbench({ id, archiveService, taskService, onAsk, onOpen
       }} /></nav> : id === 'archive'
         ? <FamilyArchive service={archiveService} onAsk={onAsk} />
         : id === 'documents' ? <DocumentLibrary service={archiveService} />
-        : id === 'design' ? <DesignWorkbench />
+        : id === 'design' ? <DesignWorkbench onAsk={onAsk} />
         : id === 'tasks' ? <TaskWorkbench service={taskService} onAsk={onAsk} />
         : <ModuleDetail key={id} id={id} onAsk={onAsk} />}
     </div>

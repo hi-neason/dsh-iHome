@@ -58,11 +58,11 @@ test('module sessions survive repeated opens, concurrent clicks, renames and res
     workspace.title = '临时改名'
     assert.equal((await manager.ensure()).title, 'iHome工作区')
     failRename = true
-    await assert.rejects(manager.open('design'), /rename failed/)
-    const reserved = stored.sessions.design.sessionId
+    await assert.rejects(manager.open('quotes'), /rename failed/)
+    const reserved = stored.sessions.quotes.sessionId
     failRename = false
     manager = createWorkspaceManager(ctx, table, directory)
-    assert.equal((await manager.open('design')).sessionId, reserved)
+    assert.equal((await manager.open('quotes')).sessionId, reserved)
     assert.equal(creates, 2)
     headers.delete(first.sessionId)
     assert.notEqual((await manager.open('archive')).sessionId, first.sessionId)
@@ -106,7 +106,7 @@ test('module sessions survive repeated opens, concurrent clicks, renames and res
     manager = createWorkspaceManager(ctx, table, directory)
     failRename = false
     assert.equal((await manager.open('archive')).sessionId, pending)
-    assert.deepEqual((await manager.ensure()).previousModuleSessions, { archive: [legacy], tasks: [legacy] })
+    assert.deepEqual((await manager.ensure()).previousModuleSessions, { archive: [legacy], tasks: [legacy], design: [legacy] })
     const restored = await manager.open('archive', legacy)
     assert.equal(restored.sessionId, legacy)
     assert.equal(restored.activeSessionId, pending)
@@ -182,10 +182,12 @@ test('upgrading separate expert conversations retains both histories and a user 
   try {
     let stored = { sessions: {
       archive: { sessionId: 'needs', ready: true, roleTitle: '需求分析师' },
+      design: { sessionId: 'old-design', ready: true, roleTitle: '户型设计师' },
       tasks: { sessionId: 'old-tasks', ready: true, roleTitle: '任务待办助理', previousSessionIds: ['older-tasks'] },
     } }
     const headers = new Map([
       ['needs', { id: 'needs', cwd: directory, agentPreset: NEEDS_ANALYST_PRESET_ID }],
+      ['old-design', { id: 'old-design', cwd: directory, agentPreset: 'standard' }],
       ['old-tasks', { id: 'old-tasks', cwd: directory, agentPreset: 'standard' }],
       ['older-tasks', { id: 'older-tasks', cwd: directory, agentPreset: 'standard' }],
     ])
@@ -208,6 +210,8 @@ test('upgrading separate expert conversations retains both histories and a user 
     const table = { get: () => stored, put: async (_, value) => { stored = structuredClone(value) } }
     let manager = createWorkspaceManager(ctx, table, directory)
     const [tasks, needs] = await Promise.all([manager.open('tasks'), manager.open('archive')])
+    assert.equal((await manager.open('design')).sessionId, 'needs')
+    assert.equal((await manager.open('design', 'old-design')).sessionId, 'old-design')
     assert.equal(tasks.sessionId, 'needs')
     assert.equal(needs.sessionId, 'needs')
     assert.deepEqual(tasks.previousSessionIds, ['old-tasks', 'older-tasks'])
@@ -216,6 +220,6 @@ test('upgrading separate expert conversations retains both histories and a user 
     manager = createWorkspaceManager(ctx, table, directory)
     assert.equal((await manager.open('tasks', 'old-tasks')).activeSessionId, 'needs')
     assert.equal((await manager.open('tasks', 'older-tasks')).sessionId, 'older-tasks')
-    assert.deepEqual((await manager.ensure()).moduleSessions, { archive: 'needs', tasks: 'needs' })
+    assert.deepEqual((await manager.ensure()).moduleSessions, { archive: 'needs', tasks: 'needs', design: 'needs' })
   } finally { await rm(directory, { recursive: true, force: true }) }
 })

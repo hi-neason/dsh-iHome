@@ -221,20 +221,21 @@ export function createWorkspaceManager(
     return { moduleSessions, previousModuleSessions }
   }
   async function openModule(id: ModuleId, previousId?: string): Promise<IHomeModuleSession> {
-    if (id !== 'archive' && id !== 'tasks') return ensureSession(id, previousId)
+    if (id !== 'archive' && id !== 'tasks' && id !== 'design') return ensureSession(id, previousId)
     // Historical conversations remain independently addressable. The current
     // archive identity is retained so existing native preset conversations resume.
     if (previousId !== undefined) return { ...await ensureSession(id, previousId), ...sessionIndex() }
     const result = await ensureSession('archive')
-    const sessions = state().sessions
-    const tasks = sessions.tasks
-    const previousSessionIds = [...new Set([
-      ...(tasks && tasks.sessionId !== result.sessionId && await headerFor(tasks.sessionId) ? [tasks.sessionId] : []),
-      ...(tasks?.previousSessionIds ?? []),
-    ])].filter(sessionId => sessionId !== result.sessionId)
-    await table.put('home', { sessions: { ...sessions, tasks: {
-      sessionId: result.sessionId, ready: true, roleTitle: 'iHome专家团', previousSessionIds,
-    } } })
+    const sessions = { ...state().sessions }
+    for (const sharedId of ['tasks', 'design'] as const) {
+      const prior = sessions[sharedId]
+      const previousSessionIds = [...new Set([
+        ...(prior && prior.sessionId !== result.sessionId && await headerFor(prior.sessionId) ? [prior.sessionId] : []),
+        ...(prior?.previousSessionIds ?? []),
+      ])].filter(sessionId => sessionId !== result.sessionId)
+      sessions[sharedId] = { sessionId: result.sessionId, ready: true, roleTitle: 'iHome专家团', previousSessionIds }
+    }
+    await table.put('home', { sessions })
     return { ...result, moduleId: id,
       previousSessionIds: state().sessions[id]?.previousSessionIds ?? [], ...sessionIndex() }
   }

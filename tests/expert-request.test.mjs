@@ -37,6 +37,7 @@ function fixture(startError) {
 }
 
 test('explicit routing accepts only exact leading expert names', () => {
+  assert.deepEqual(parseExpertRequest('/户型设计师 画两层'), { expert: 'ihome-floorplan-designer', task: '画两层' })
   assert.deepEqual(parseExpertRequest('/需求分析师\n帮我梳理需求'), { expert: 'ihome-needs-analyst', task: '帮我梳理需求' })
   assert.equal(parseExpertRequest('引用 /需求分析师 问题'), undefined)
   assert.equal(parseExpertRequest('/需求分析师x 问题'), undefined)

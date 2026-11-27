@@ -20,9 +20,10 @@ export interface ExpertRequestContext extends Pick<ExpertDispatchContext, 'subag
 }
 
 export function parseExpertRequest(text: string): { expert: ExpertRole, task: string } | undefined {
-  const match = /^\/(需求分析师|任务待办助理)(?:\s+([\s\S]*))?$/.exec(text.replace(/^[ \t]+/, ''))
+  const match = /^\/(需求分析师|任务待办助理|户型设计师)(?:\s+([\s\S]*))?$/.exec(text.replace(/^[ \t]+/, ''))
   if (!match) return undefined
-  return { expert: match[1] === '需求分析师' ? 'ihome-needs-analyst' : 'ihome-task-assistant', task: (match[2] ?? '').trim() }
+  const roles: Record<string, ExpertRole> = { 需求分析师: 'ihome-needs-analyst', 任务待办助理: 'ihome-task-assistant', 户型设计师: 'ihome-floorplan-designer' }
+  return { expert: roles[match[1]], task: (match[2] ?? '').trim() }
 }
 function messageText(message: Message): string {
   return message.content.filter(block => block.type === 'text').map(block => block.text ?? '').join('\n')

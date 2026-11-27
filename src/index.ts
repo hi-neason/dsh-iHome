@@ -1,6 +1,7 @@
 import { mountArchive } from './archive-host'
 import type { ArchiveHostContext } from './archive-host'
 import { mountIHomeWorkspace, type WorkspaceHostContext } from './ihome-workspace'
+import { mountDesignTools, type DesignToolsContext } from './design-tools'
 import { mountDesigns, type DesignHostContext } from './design-host'
 import { mountTasks, type TaskHostContext } from './task-host'
 import { mountAgentSettings, type AgentSettingsHostContext } from './agent-settings-host'
@@ -10,10 +11,11 @@ import { mountExpertDispatch, type ExpertDispatchContext } from './expert-dispat
 export const name = 'ihome'
 export const inject = ['storageDomain', 'connection', 'attachments', 'tools', 'userQuestions', 'workspaceRegistry', 'sessionController', 'sessionPersistence', 'sessions', 'systemPrompt', 'agentPresets', 'subagents']
 
-export async function apply(ctx: ArchiveHostContext & WorkspaceHostContext & TaskHostContext & AgentSettingsHostContext & ExpertDispatchContext & ExpertRequestContext & DesignHostContext): Promise<void> {
+export async function apply(ctx: ArchiveHostContext & WorkspaceHostContext & TaskHostContext & AgentSettingsHostContext & ExpertDispatchContext & ExpertRequestContext & DesignHostContext & DesignToolsContext): Promise<void> {
   await mountArchive(ctx)
   await mountTasks(ctx)
   await mountDesigns(ctx)
+  await mountDesignTools(ctx)
   await mountAgentSettings(ctx)
   mountExpertDispatch(ctx)
   mountExpertRequests(ctx)
