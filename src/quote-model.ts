@@ -1,3 +1,4 @@
+import { assertUniqueQuoteReviews, parseQuoteReview, type QuoteReview } from './quote-review.ts'
 import { parseQuoteReference, type QuoteReference } from './quote-reference.ts'
 export type { QuoteReference } from './quote-reference.ts'
 import { parseQuoteVersion, type QuoteVersion } from './quote-version.ts'
@@ -19,6 +20,7 @@ export interface QuoteBoard {
   vendors: QuoteVendor[]
   quotes: QuoteVersion[]
   references: QuoteReference[]
+  reviews: QuoteReview[]
 }
 
 export function quoteObject(value: unknown): Record<string, unknown> {
@@ -63,10 +65,14 @@ export function parseQuoteBoard(value: unknown): QuoteBoard {
     if (versions.has(key)) throw new Error('同一团队的报价版本名称须唯一。')
     versions.add(key)
   }
-  return { revision: row.revision, vendors, quotes, references: records(row.references === undefined ? [] : row.references, parseQuoteReference) }
+  const reviews = records(row.reviews === undefined ? [] : row.reviews, parseQuoteReview)
+  const quoteIds = new Set(quotes.map(quote => quote.id))
+  if (reviews.some(review => !quoteIds.has(review.quoteId))) throw new Error('澄清记录关联的报价版本不存在。')
+  assertUniqueQuoteReviews(reviews)
+  return { revision: row.revision, vendors, quotes, reviews, references: records(row.references === undefined ? [] : row.references, parseQuoteReference) }
 }
 
-export const quoteCollections = ['vendors', 'quotes', 'references'] as const
+export const quoteCollections = ['vendors', 'quotes', 'references', 'reviews'] as const
 export type QuoteCollection = typeof quoteCollections[number]
 export class QuoteConflict extends Error {}
 
@@ -83,6 +89,8 @@ export function changeQuoteBoard(board: QuoteBoard, value: unknown): QuoteBoard 
   if (!saved) throw new Error('请使用没有首尾空格的记录编号。')
   if (previous && JSON.stringify(saved) === JSON.stringify(previous)) return board
   if (raw.expectedRevision !== board.revision) throw new QuoteConflict('选商档案已有更新，请刷新并核对后再保存。')
+  if (previous && collection === 'reviews' && 'quoteId' in previous && previous.quoteId !== record.quoteId)
+    throw new Error('已有澄清记录不能换到另一份报价。')
   if (previous && collection === 'quotes') throw new Error('报价原版已保存，请另存新版本。')
   return next
 }
