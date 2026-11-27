@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useId, useRef, useState, type MouseEvent } from 'react'
 import { ArchiveDialog } from './ArchiveDialog'
 import type { ArchiveService } from './archive-model'
 import type { DesignFloor, DesignReference } from './design-model'
@@ -48,6 +48,7 @@ function ReferenceDialog({ archive, original, save, close }: {
   const [x, setX] = useState(String(original?.x ?? 0)), [z, setZ] = useState(String(original?.z ?? 0))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const hintId = useId()
   const img = useRef<HTMLImageElement>(null)
   const sequence = useRef(0)
   useEffect(() => {
@@ -82,13 +83,22 @@ function ReferenceDialog({ archive, original, save, close }: {
     const image = event.currentTarget, rect = image.getBoundingClientRect()
     if (!image.naturalWidth) return
     const point = { x: (event.clientX - rect.left) * image.naturalWidth / rect.width, y: (event.clientY - rect.top) * image.naturalHeight / rect.height }
+    if (points.length === 1 && Math.hypot(points[0].x - point.x, points[0].y - point.y) < 1) {
+      setError('已选起点，请点击尺寸线另一端。')
+      return
+    }
+    setError('')
     setPoints(previous => previous.length === 1 ? [...previous, point] : [point])
   }
+  const metres = Number(distance)
+  const missing = points.length === 0 ? '请在图上点击一条已知尺寸线的起点和终点。'
+    : points.length === 1 ? '已选起点，请点击同一条尺寸线的终点。'
+    : !Number.isFinite(metres) || metres < 0.001 ? '已选两个端点，请填写两点实际距离（米）。' : ''
   async function commit() {
-    if (!source || !img.current || busy || points.length !== 2) return
+    if (!source || !img.current || busy || missing) return
     setBusy(true); setError('')
     try {
-      const size = calibratedSize(img.current.naturalWidth, img.current.naturalHeight, points[0], points[1], Number(distance))
+      const size = calibratedSize(img.current.naturalWidth, img.current.naturalHeight, points[0], points[1], metres)
       const assetId = source.id ?? await storeDesignAsset(source.blob, source.name)
       if (await save({ assetId, name: source.name, x: Number(x), z: Number(z), ...size })) close()
       else setError('底图未保存，请核对当前草稿后重试。')
@@ -103,15 +113,19 @@ function ReferenceDialog({ archive, original, save, close }: {
     {!!files.length && <label>家庭档案原图<select defaultValue="" onChange={e => void chooseArchive(e.target.value)}>
       <option value="">选择已归档的图片</option>{files.map(file => <option key={file.id} value={file.id}>{file.name}</option>)}
     </select></label>}
-    {source && url && <><span>依次点击一段已知长度的两个端点。</span>
-      <div className="ih-reference-points"><img ref={img} src={url} alt="待校准的户型底图" onClick={mark}
+    {source && url && <><span>在同一条尺寸线上选点（{points.length}/2）</span>
+      <div className="ih-reference-points"><img ref={img} src={url} alt="待校准的户型底图" draggable={false} onClick={mark}
         onError={() => setError('图片无法解码，请选择 PNG、JPEG 或 WebP。')} />
+        {points.length === 2 && <svg aria-hidden="true" viewBox={`0 0 ${img.current!.naturalWidth} ${img.current!.naturalHeight}`} preserveAspectRatio="none">
+          <line x1={points[0].x} y1={points[0].y} x2={points[1].x} y2={points[1].y} vectorEffect="non-scaling-stroke" />
+        </svg>}
         {points.map((point, index) => <i key={index} aria-hidden style={{ left: 100 * point.x / img.current!.naturalWidth + '%', top: 100 * point.y / img.current!.naturalHeight + '%' }} />)}
       </div>
-      <label>两点实际距离（米）<input required type="number" step="any" min=".001" value={distance} onChange={e => setDistance(e.target.value)} /></label>
+      <label>两点实际距离（米）<input required type="number" step="any" min=".001" placeholder="例如，3600 毫米填 3.6" value={distance} onChange={e => setDistance(e.target.value)} /></label>
       <label>图纸左上角 X（米）<input type="number" required step="any" value={x} onChange={e => setX(e.target.value)} /></label>
       <label>图纸左上角 Z（米）<input type="number" required step="any" value={z} onChange={e => setZ(e.target.value)} /></label>
-      <button disabled={points.length !== 2 || !(Number(distance) > 0)}>使用这张底图</button></>}
+      <span id={hintId} role="status">{missing || '比例已就绪，可以使用这张底图。'}</span>
+      <button className="ih-reference-submit" aria-describedby={hintId} disabled={!!missing}>使用这张底图</button></>}
     {error && <p role="alert">{error}</p>}
   </fieldset></form></ArchiveDialog>
 }

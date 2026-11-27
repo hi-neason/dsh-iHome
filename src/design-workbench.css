@@ -15,5 +15,8 @@
 .ih-design-versions { display:grid; gap:7px; }
 .ih-design details > summary { cursor:pointer; }
 .ih-reference-points { position:relative; line-height:0; }
-.ih-reference-points img { width:100%; height:auto; cursor:crosshair; }
+.ih-reference-points img { display:block; width:100%; height:auto; cursor:crosshair; user-select:none; }
+.ih-reference-points svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; stroke:#fa854d; stroke-width:2; }
 .ih-reference-points i { position:absolute; width:10px; height:10px; border:2px solid white; border-radius:50%; background:#d34e2b; transform:translate(-50%,-50%); pointer-events:none; }
+.ih-design-form .ih-reference-submit:disabled { opacity:.55; cursor:not-allowed; }
+.ih-design-form .ih-reference-submit:enabled { color:Canvas; background:CanvasText; }
