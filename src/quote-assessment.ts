@@ -1,3 +1,4 @@
+import { compareQuotes } from './quote-analysis.ts'
 import type { QuoteBoard } from './quote-model.ts'
 import { quoteObject, quoteText, QuoteConflict } from './quote-model.ts'
 import { auditDateToday, auditQuote } from './quote-audit.ts'
@@ -75,7 +76,19 @@ export function assessmentBasis(board: QuoteBoard, raw: unknown) {
       hint: '用 ihome_read_quotes 的 quoteId 读取原始分项、每条带出处的参照单价和澄清答复。',
     } : null }
   })
+  const withoutQuote = selections.filter(s => !s.quoteId).map(s => s.vendorId)
+  let comparison
+  if (selections.length > 1 && !withoutQuote.length) {
+    const versions = new Map(selections.map(s => [s.vendorId, s.quoteId!]))
+    const selectedIds = Object.fromEntries(board.vendors.map(v => [v.id, versions.get(v.id) ?? '']))
+    const result = compareQuotes(board, selectedIds)
+    comparison = { comparableCount: result.comparableCount, itemCount: result.rows.length,
+      quotes: result.quotes.map((q, index) => ({ vendorId: q.vendorId, quoteId: q.id, statedTotal: q.statedTotal, comparableSubtotal: result.subtotals[index] })),
+      rows: result.rows.slice(0, 40).map(row => ({ key: row.key, label: row.label, issues: row.issues, spread: row.spread })),
+      hint: '用 ihome_read_quotes 的 quoteIds 读取全部对齐行及各公司书面原值。' }
+  }
   return { basisRevision: board.revision, selections, companies, scopeItems: board.scopeItems,
+    ...(selections.length > 1 ? { comparison: comparison ?? null, companiesWithoutStructuredQuote: withoutQuote } : {}),
     readOriginals: '按所选 vendorId 和 documentId 调用 ihome_read_quote_source 阅读原件，区分已读和未读范围。' }
 }
 

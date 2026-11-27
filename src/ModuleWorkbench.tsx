@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { FamilyArchive } from './FamilyArchive'
 import { DocumentLibrary } from './DocumentLibrary'
+import { CompanyComparison } from './CompanyComparison'
 import { CompanyAssessmentPanel } from './CompanyAssessment'
 import { VendorResearch } from './VendorResearch'
 import { QuoteWorkbench } from './QuoteWorkbench'
@@ -58,6 +59,7 @@ export function ModuleWorkbench({ id, archiveService, taskService, onAsk, onOpen
         : id === 'documents' ? <DocumentLibrary service={archiveService} />
         : id === 'design' ? <DesignWorkbench onAsk={onAsk} />
         : id === 'quotes' ? <QuoteWorkbench onAsk={onAsk} sessionId={sessionId} openDocument={openDocument}
+          renderCompanyComparison={ctx => <CompanyComparison {...ctx}/>}
           renderCompanyAudit={ctx => <CompanyAssessmentPanel {...ctx}/>}
           renderCompanyReputation={ctx => <VendorResearch {...ctx}/>} />
         : id === 'tasks' ? <TaskWorkbench service={taskService} onAsk={onAsk} />

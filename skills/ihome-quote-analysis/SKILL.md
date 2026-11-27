@@ -23,6 +23,10 @@ description: 按业主提供的商家资料、报价和合同核查证据、核�
 
 向主会话交付结论及一条 collection=assessments 的 record。包含新 id、basisRevision、原 selections、summary、findings。每条发现包括 dimension（设计/报价/合同/口碑/综合）、status（finding 或 gap）、detail、citations 数组及 question。每个 citation 用 type（document/quote/research/vendor/scope/reference/clarification）、所选依据的原 id、at（实际页码、段落、单元格或网页 URL）和 excerpt（原文或书面数字）。对照两份文件的矛盾要引用两方原文。尚无证据的维度用 gap、空 citations、具体补证问题。报告与业主签约决定分别归档。
 
+## 比较多家公司
+
+用一条含各家 vendorId、原件版本 documentIds、quoteId 和 researchId 的 assessmentScope 读取本次范围。即使公司没有报价或合同也保留这一列。每家分别阅读指定原件，先核对各自内部的图纸、报价与合同，再按同一个业主要求对齐设计、承包内容、费用、关键合同条款和可归属的评价。把各家优劣关联到具体原文与版本。只有所有参与方均有结构化报价且项目条件相当时才引用共同可比分项小计。仅有原件时可从原文复算，保留定位和口径；缺项、暂估、税费条件及待问事项单列。未获评价的公司保留证据缺口。比较报告沿用 assessments，返回全部选定的 selections；业主另外决定是否签约。
+
 ## 向主会话交付可登记的明细
 
 业主要求登记资料时，先读取当前记录，返回 expectedRevision、collection 和单条 record。关联已有记录时使用读取到的编号。补充候选团队资料时返回完整记录，保留原有字段。缺少必填依据时先列出要向业主核实的信息。

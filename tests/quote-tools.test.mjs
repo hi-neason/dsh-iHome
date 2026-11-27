@@ -181,3 +181,30 @@ test('公司审核冻结选定版本和引文，拒绝错配、缺依据和过�
   assert.deepEqual((await f.read({ vendorId:'v2' })).assessments, [])
   assert.match((await f.read({ assessmentId:'a1' })).assessment.report, /甲装修/)
 })
+
+test('多家公司只比较所选版本，无报价的公司仍保留并阻止全体可比小计', async () => {
+  const f = fixture()
+  for (const id of ['v1','v2','v3']) await f.propose('vendors', { ...firstVendor, id })
+  await f.propose('quotes', quote)
+  await f.propose('quotes', { ...quote, id:'new', version:'新稿', statedTotal:500, lines:[{ ...line, unitPrice:50, amount:500 }] })
+  await f.propose('quotes', { ...quote, id:'q2', vendorId:'v2', statedTotal:330, lines:[{ ...line, unitPrice:33, amount:330 }] })
+  const pick = (vendorId, quoteId) => ({ vendorId, quoteId, documentIds:[], researchId:null })
+  const two = [pick('v2','q2'), pick('v1','q1')]
+  const basis = await f.read({ assessmentScope:two })
+  assert.deepEqual(basis.companies.map(c => c.vendor.id), ['v2','v1'])
+  assert.deepEqual(basis.comparison.quotes.map(q => [q.quoteId,q.comparableSubtotal]), [['q1',300],['q2',330]])
+  assert.equal(basis.comparison.rows[0].spread, 30)
+  const partial = await f.read({ assessmentScope:[...two, pick('v3',null)] })
+  assert.equal(partial.comparison, null)
+  assert.deepEqual(partial.companiesWithoutStructuredQuote, ['v3'])
+  await assert.rejects(f.read({ assessmentScope:[two[0],two[0]] }), /只能选择一次/)
+  const record = { id:'compare', basisRevision:basis.basisRevision, selections:two, summary:'甲乙原稿可比', findings:[{
+    dimension:'报价', status:'finding', detail:'墙漆价差30元', question:'', citations:two.map(s => ({
+      type:'quote', id:s.quoteId, at:line.source, excerpt:s.quoteId === 'q1' ? '300元' : '330元' })),
+  }] }
+  assert.equal((await f.propose('assessments', record)).status, 'applied')
+  const saved = (await f.read({ assessmentId:'compare' })).assessment
+  assert.deepEqual(saved.selections, two)
+  assert.match(saved.report, /多家公司比较[\s\S]*330元[\s\S]*300元/)
+  assert.equal((await f.read({ vendorId:'v3' })).assessments.length, 0)
+})
