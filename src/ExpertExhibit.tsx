@@ -24,7 +24,7 @@ export function ExpertExhibit({ onOpen }: { onOpen: (id: ModuleId) => Promise<vo
     opening.current = true
     setError('')
     try { await onOpen(id) }
-    catch (cause) { setError(cause instanceof Error ? cause.message : '无法打开专家会话，请重试。') }
+    catch (cause) { setError(cause instanceof Error ? cause.message : '无法打开专家工作台，请重试。') }
     finally { opening.current = false }
   }
   return <section className="ih-hub-hero" aria-label="装修专家工作室">

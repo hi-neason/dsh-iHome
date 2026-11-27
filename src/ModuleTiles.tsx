@@ -41,7 +41,7 @@ export function ModuleTiles({ onOpenModule }: { onOpenModule: OpenModule }) {
     try {
       await onOpenModule(id)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '无法打开会话，请重试。')
+      setError(cause instanceof Error ? cause.message : '无法打开专家工作台，请重试。')
     } finally {
       opening.current = false
       setPending(null)
@@ -55,7 +55,7 @@ export function ModuleTiles({ onOpenModule }: { onOpenModule: OpenModule }) {
       <span className="ih-expert-photo"><AgentPortrait id={id} /></span>
       <span className="ih-expert-copy">
         <strong>{title}</strong>
-        <span className="ih-expert-description">{pending === id ? '正在打开会话…' : description}</span>
+        <span className="ih-expert-description">{pending === id ? '正在打开工作台…' : description}</span>
       </span>
       <span className="ih-expert-arrow"><Arrow /></span>
     </button>

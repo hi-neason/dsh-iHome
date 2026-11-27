@@ -4,7 +4,6 @@ import { ModuleWorkbench } from './ModuleWorkbench'
 import { createArchiveService } from './archive-client'
 import { createTaskService } from './task-client'
 import { createIHomeNavigation, workbenchKind, type NavigationContext } from './ihome-navigation'
-import { modules } from './modules'
 import { AgentSettings } from './AgentSettings'
 import { mountExpertSlash, type ExpertSlashContext } from './expert-slash-client'
 
@@ -31,7 +30,7 @@ interface ClientContext extends NavigationContext {
 
 const panelId = 'ihome'
 const workbenchId = 'dsh-ihome-workbench'
-export const inject = ['slots', 'layout', 'uiWorkspace', 'sidebarRight', 'sidebarRightTabs', 'sessions', 'conversation', 'inputTriggers', 'locale']
+export const inject = ['slots', 'layout', 'uiWorkspace', 'sidebarRight', 'sidebarRightTabs', 'sessions', 'workspaces', 'conversation', 'inputTriggers', 'locale']
 
 function IHomeIcon({ size = 16 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
@@ -63,28 +62,11 @@ export function apply(ctx: ClientContext): void {
   }
   function IHomeWorkbench({ sessionId }: { sessionId: string }) {
     const { snapshot, error, setError } = useWorkspace()
-    const matching = modules.filter(module => snapshot.moduleSessions[module.id] === sessionId
-      || snapshot.previousModuleSessions[module.id]?.includes(sessionId))
-    const expert = matching.find(module => module.id === snapshot.selectedModules[sessionId]) ?? matching[0]
-    const sharedTeam = snapshot.moduleSessions.archive === sessionId && snapshot.moduleSessions.tasks === sessionId
-    const id = expert?.id ?? null
+    const id = snapshot.selectedModules[sessionId] ?? null
     const workbenchKey = id === 'design' ? sessionId + ':design:' + (snapshot.designEntries[sessionId] ?? 0) : sessionId + ':' + id
-    const previous = id ? snapshot.previousModuleSessions[id] ?? [] : []
-    function switchSession(previousId?: string) {
-      if (!id) return
-      setError('')
-      void navigation.openModule(id, previousId).catch(error => setError(String(error.message ?? error)))
-    }
     return <>{error && <p role="alert">{error}</p>}
-      <ModuleWorkbench key={workbenchKey} id={id} sharedTeam={sharedTeam} archiveService={archiveService} taskService={taskService}
-        historyLinks={expert && previous.length ? [
-          ...(previous.includes(sessionId) ? [{ label: '进入 iHome专家团', open: () => switchSession() }] : []),
-          ...previous.filter(previousId => previousId !== sessionId).map((previousId, index) => ({
-            label: previous.length > 1 ? '查看原对话 ' + (index + 1) : '查看原对话',
-            open: () => switchSession(previousId),
-          })),
-        ] : undefined}
-        onOpenModule={navigation.openModule} onAsk={prompt => {
+      <ModuleWorkbench key={workbenchKey} id={id} archiveService={archiveService} taskService={taskService}
+        onOpenModule={next => navigation.openModule(next, sessionId)} onAsk={prompt => {
           setError('')
           void navigation.prepareDraft(sessionId, prompt).catch(error => setError(String(error.message ?? error)))
         }} />

@@ -152,10 +152,6 @@ html[data-platform='darwin'] .ih-masthead {
   border: 1px solid var(--ih-line); border-radius: 7px; padding: 6px 10px; font-size: 12px; background: var(--ih-surface);
 }
 .ih-workbench .ih-module-detail { padding-top: 0; }
-.ih-workbench-history {
-  display: block; margin: -6px 0 12px; padding: 3px 0; color: var(--ih-ink);
-  border: 0; background: transparent; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
-}
 
 @keyframes ih-view-in { from { opacity: .22; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: no-preference) {
@@ -174,7 +170,3 @@ html[data-platform='darwin'] .ih-masthead {
   .ih-studio { margin: 4px 6px 6px; aspect-ratio: 2.7; }
   .ih-motion-toggle { width: 26px; height: 26px; top: 12px; right: 12px; bottom: auto; }
 }
-
-.ih-team-workbench-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
-.ih-team-workbench-tabs button { flex: 1; padding: 8px 12px; border: 1px solid var(--ih-line); border-radius: 10px; background: transparent; color: inherit; cursor: pointer; }
-.ih-team-workbench-tabs button[aria-pressed="true"] { background: var(--ih-surface); font-weight: 650; }

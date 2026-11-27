@@ -3,223 +3,181 @@ import test from 'node:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createWorkspaceManager, moduleSessionPrompt } from '../src/ihome-workspace.ts'
-import { NEEDS_ANALYST_PRESET_ID } from '../src/agent-presets.ts'
+import { createWorkspaceManager, moduleSessionPrompt, mountIHomeWorkspace } from '../src/ihome-workspace.ts'
+import { iHomeWorkspacePath } from '../src/ihome-workspace-path.ts'
+import { IHOME_TEAM_PRESET_ID } from '../src/agent-presets.ts'
 
-test('module sessions survive repeated opens, concurrent clicks, renames and restart', async () => {
+async function fixture(t, initial) {
   const directory = await mkdtemp(join(tmpdir(), 'ihome-workspace-'))
-  try {
-    let stored
-    const table = { get: () => stored, put: async (_, value) => { stored = structuredClone(value) } }
-    const headers = new Map(), names = new Map(), archived = new Set()
-    const workspace = { id: 'workspace', title: 'iHome工作区', path: directory, sessionIds: [],
-      async setTitle(title) { this.title = title },
-      async attachSession(id) { if (!this.sessionIds.includes(id)) this.sessionIds.push(id) } }
-    let creates = 0, failRename = false
-    const ctx = {
-      agentPresets: { defaultId: 'standard' },
-      workspaceRegistry: { create: async () => workspace, unarchiveSession: async id => { archived.delete(id) } },
-      sessions: { get: () => undefined },
-      sessionPersistence: { stat: async id => headers.has(id) ? { header: headers.get(id) } : undefined, flush: async () => {} },
-      sessionController: {
-        async create({ sessionId, agentPreset }) {
-          creates++
-          headers.set(sessionId, { id: sessionId, cwd: directory, agentPreset })
-          return { sessionId, agentPreset }
-        },
-        async projections({ sessionId }) {
-          return { kind: 'sequenced', values: { title: names.get(sessionId), agentPreset: headers.get(sessionId)?.agentPreset } }
-        },
-        async rename({ sessionId, title }) { if (failRename) throw new Error('rename failed'); names.set(sessionId, title) },
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  let stored = initial, beforePut = () => {}, createFailure = false
+  const headers = new Map(), titles = new Map(), archived = [], creates = [], routes = [], prompts = []
+  const workspace = { id: 'workspace', title: 'iHome工作区', path: directory, sessionIds: [],
+    async setTitle(title) { this.title = title } }
+  const table = { get: () => stored, put: async (_, value) => { beforePut(value); stored = structuredClone(value) } }
+  const ctx = {
+    agentPresets: { defaultId: 'standard', presetForSession: session => session.header.agentPreset },
+    workspaceRegistry: { archivedSessionIds: archived, create: async () => workspace,
+      async unarchiveSession() { assert.fail('expert selection must never restore an archive') } },
+    sessions: { get: id => headers.has(id) ? { id, header: headers.get(id) } : undefined },
+    sessionPersistence: { stat: async id => headers.has(id) ? { header: headers.get(id) } : undefined, flush: async () => {} },
+    sessionController: {
+      async create(request) {
+        creates.push(request)
+        if (createFailure) throw new Error('storage offline')
+        const { sessionId, agentPreset } = request
+        headers.set(sessionId, { id: sessionId, cwd: directory, agentPreset })
+        workspace.sessionIds.push(sessionId)
+        return { sessionId, agentPreset }
       },
-    }
-    let manager = createWorkspaceManager(ctx, table, directory)
-    const [first, repeated] = await Promise.all([manager.open('archive'), manager.open('archive')])
-    assert.equal(first.sessionId, repeated.sessionId)
-    assert.equal(creates, 1)
-    assert.equal(headers.get(first.sessionId).agentPreset, NEEDS_ANALYST_PRESET_ID)
-    assert.equal(names.get(first.sessionId), 'iHome专家团')
-    stored.sessions.archive.roleTitle = '家庭需求分析师'
-    names.set(first.sessionId, '家庭需求分析师')
-    assert.equal((await manager.open('archive')).sessionId, first.sessionId)
-    assert.equal(names.get(first.sessionId), 'iHome专家团')
-    // Simulate a pre-team archive session and a later user-named conversation.
-    delete stored.sessions.archive.roleTitle
-    names.set(first.sessionId, '家庭档案库')
-    assert.equal((await manager.open('archive')).sessionId, first.sessionId)
-    assert.equal(names.get(first.sessionId), 'iHome专家团')
-    delete stored.sessions.archive.roleTitle
-    names.set(first.sessionId, '我的具体需求')
-    archived.add(first.sessionId)
-    manager = createWorkspaceManager(ctx, table, directory)
-    assert.equal((await manager.open('archive')).sessionId, first.sessionId)
-    assert.equal(names.get(first.sessionId), '我的具体需求')
-    assert.equal(archived.size, 0)
-    workspace.title = '临时改名'
-    assert.equal((await manager.ensure()).title, 'iHome工作区')
-    failRename = true
-    await assert.rejects(manager.open('quotes'), /rename failed/)
-    const reserved = stored.sessions.quotes.sessionId
-    failRename = false
-    manager = createWorkspaceManager(ctx, table, directory)
-    assert.equal((await manager.open('quotes')).sessionId, reserved)
-    assert.equal(creates, 2)
-    headers.delete(first.sessionId)
-    assert.notEqual((await manager.open('archive')).sessionId, first.sessionId)
-    assert.equal(creates, 3)
-    await assert.rejects(manager.open('invalid'))
-    assert.equal(creates, 3)
-    const budget = await manager.open('budget')
-    names.set(budget.sessionId, '已经记下的装修支出')
-    const movein = await manager.open('movein')
-    assert.notEqual(movein.sessionId, budget.sessionId)
-    assert.equal(names.get(movein.sessionId), '入住规划师')
-    manager = createWorkspaceManager(ctx, table, directory)
-    const recovered = await manager.ensure()
-    assert.equal(recovered.moduleSessions.budget, budget.sessionId)
-    assert.equal(recovered.moduleSessions.movein, movein.sessionId)
-    assert.equal((await manager.open('budget')).sessionId, budget.sessionId)
-    assert.equal(names.get(budget.sessionId), '已经记下的装修支出')
-    const documents = await manager.open('documents')
-    assert.equal(names.get(documents.sessionId), '文档资料员')
-    assert.notEqual(documents.sessionId, movein.sessionId)
-    const tasks = await manager.open('tasks')
-    assert.equal(names.get(tasks.sessionId), 'iHome专家团')
-    assert.equal(tasks.sessionId, stored.sessions.archive.sessionId)
-    assert.notEqual(tasks.sessionId, documents.sessionId)
-    manager = createWorkspaceManager(ctx, table, directory)
-    assert.equal((await manager.open('tasks')).sessionId, tasks.sessionId)
-    assert.equal(headers.get(tasks.sessionId).agentPreset, NEEDS_ANALYST_PRESET_ID)
-    ctx.agentPresets.defaultId = NEEDS_ANALYST_PRESET_ID
-    const knowledge = await manager.open('knowledge')
-    assert.equal(headers.get(knowledge.sessionId).agentPreset, 'standard')
+      async rename() { assert.fail('expert selection must not rename a conversation') },
+    },
+    storageDomain: { open: async () => ({ table: () => table, close: async () => {} }) },
+    connection: { fetch: { register(route) { routes.push(route); return () => {} } } },
+    systemPrompt: { getSectionOrder: () => 100, section(value) { prompts.push(value); return () => {} } },
+    effect: setup => setup(),
+  }
+  const add = (id, overrides = {}) => {
+    headers.set(id, { id, cwd: directory, agentPreset: 'standard', ...overrides })
+    titles.set(id, '用户命名的 ' + id)
+    workspace.sessionIds.push(id)
+    return id
+  }
+  return { ctx, table, directory, archived, headers, titles, creates, routes, prompts, add,
+    state: () => stored, restart: () => createWorkspaceManager(ctx, table, directory),
+    failCreate(value) { createFailure = value }, onPut(callback) { beforePut = callback } }
+}
 
-    // Upgrade a pre-preset session. A failed creation must retain the previous
-    // identity and the pending replacement across a restart.
-    const legacy = stored.sessions.archive.sessionId
-    headers.get(legacy).agentPreset = 'standard'
-    names.set(legacy, '我最早记录的需求')
-    failRename = true
-    await assert.rejects(manager.open('archive'), /rename failed/)
-    const pending = stored.sessions.archive.sessionId
-    assert.notEqual(pending, legacy)
-    manager = createWorkspaceManager(ctx, table, directory)
-    failRename = false
-    assert.equal((await manager.open('archive')).sessionId, pending)
-    assert.deepEqual((await manager.ensure()).previousModuleSessions, { archive: [legacy], tasks: [legacy], design: [legacy] })
-    const restored = await manager.open('archive', legacy)
-    assert.equal(restored.sessionId, legacy)
-    assert.equal(restored.activeSessionId, pending)
-    assert.equal(names.get(legacy), '我最早记录的需求')
-    assert.equal((await manager.open('archive')).sessionId, pending)
-    await assert.rejects(manager.open('archive', 'unrelated'), /历史会话/)
-    headers.get(legacy).cwd = '/other'
-    await assert.rejects(manager.open('archive', legacy), /历史会话/)
-  } finally { await rm(directory, { recursive: true, force: true }) }
+test('all experts can share the current ordinary session without changing its title or preset', async t => {
+  const f = await fixture(t), current = f.add('manually-created')
+  const manager = f.restart()
+  for (const role of ['archive', 'tasks', 'design', 'knowledge', 'quotes', 'documents']) {
+    assert.equal((await manager.open(role, current)).sessionId, current)
+    assert.equal(f.state().selectedModules[current], role)
+  }
+  assert.equal(f.creates.length, 0)
+  assert.equal(f.headers.get(current).agentPreset, 'standard')
+  assert.equal(f.titles.get(current), '用户命名的 manually-created')
+  const freshManager = f.restart()
+  assert.equal((await freshManager.open('materials')).sessionId, current)
+  assert.deepEqual((await freshManager.ensure()).selectedModules, { [current]: 'materials' })
 })
 
-test('storage errors propagate and a partial creation retries the reserved identity', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'ihome-workspace-'))
-  try {
-    let record, fail = true
-    const calls = []
-    const workspace = { id: 'w', path: directory, title: 'iHome工作区', sessionIds: [],
-      async setTitle() {}, async attachSession() {} }
-    const ctx = {
-      workspaceRegistry: { create: async () => workspace, unarchiveSession: async () => {} },
-      sessions: { get: id => calls.includes(id) && !fail ? { header: { id, cwd: directory } } : undefined },
-      sessionPersistence: { stat: async () => undefined, flush: async () => {} },
-      sessionController: {
-        async create({sessionId, agentPreset}) { calls.push(sessionId); if (fail) throw new Error('storage offline'); return {sessionId, agentPreset} },
-        async projections() { return { kind: 'sequenced', values: { agentPreset: NEEDS_ANALYST_PRESET_ID } } },
-        async rename() {},
-      },
-    }
-    const manager = createWorkspaceManager(ctx, {get: () => record, put: async (_, next) => { record = next }}, directory)
-    await assert.rejects(manager.open('archive'), /storage offline/)
-    const reserved = record.sessions.archive.sessionId
-    fail = false
-    assert.equal((await manager.open('archive')).sessionId, reserved)
-    assert.equal(new Set(calls).size, 1)
-  } finally { await rm(directory, {recursive:true,force:true}) }
+test('archive is respected across clicks, restart and obsolete module indexes', async t => {
+  const f = await fixture(t, { sessions: { archive: { sessionId: 'old', ready: true }, tasks: { sessionId: 'old', ready: true } } })
+  f.add('old'); f.archived.push('old')
+  const manager = f.restart()
+  const first = await manager.open('archive')
+  assert.notEqual(first.sessionId, 'old')
+  assert.deepEqual(f.archived, ['old'])
+  f.archived.push(first.sessionId)
+  const next = await f.restart().open('tasks', first.sessionId)
+  assert.notEqual(next.sessionId, first.sessionId)
+  assert.deepEqual(f.archived, ['old', first.sessionId])
+  assert.equal(f.creates.length, 2)
+  assert.deepEqual((await manager.ensure()).selectedModules, { [next.sessionId]: 'tasks' })
+  assert.equal(f.titles.get('old'), '用户命名的 old')
 })
 
+test('a stale explicitly selected conversation starts fresh instead of reopening unrelated history', async t => {
+  const f = await fixture(t), remembered = f.add('remembered'), current = f.add('current')
+  const manager = f.restart()
+  await manager.open('archive', remembered)
+  f.archived.push(current)
+  assert.notEqual((await manager.open('tasks', current)).sessionId, remembered)
+  const deleted = await manager.open('archive', 'deleted')
+  assert.notEqual(deleted.sessionId, remembered)
+  const child = f.add('child', { origin: 'subagent', delegationDepth: 1 })
+  assert.notEqual((await manager.open('design', child)).sessionId, child)
+  assert.equal(f.creates.length, 3)
+})
 
-test('module system instructions apply only to their own native sessions', () => {
-  const state = { sessions: { archive: { sessionId: 'archive-session', ready: true } } }
+test('another workspace can continue the last iHome conversation while a new iHome current wins', async t => {
+  const f = await fixture(t), old = f.add('old'), other = f.add('other', { cwd: '/other' }), fresh = f.add('fresh')
+  const manager = f.restart()
+  await manager.open('archive', old)
+  assert.equal((await manager.open('tasks', other)).sessionId, old)
+  assert.equal((await manager.open('tasks', fresh)).sessionId, fresh)
+  assert.equal(f.creates.length, 0)
+  f.archived.push(fresh)
+  const next = await f.restart().open('archive')
+  assert.notEqual(next.sessionId, old)
+  assert.notEqual(next.sessionId, fresh)
+})
+
+test('concurrent first clicks create one team conversation and resume a failed reservation', async t => {
+  const f = await fixture(t), manager = f.restart()
+  f.failCreate(true)
+  await assert.rejects(manager.open('archive'), /storage offline/)
+  const pending = f.state().pendingSessionId
+  f.failCreate(false)
+  const restarted = f.restart()
+  const [one, two] = await Promise.all([restarted.open('tasks'), restarted.open('quotes')])
+  assert.equal(one.sessionId, pending)
+  assert.equal(two.sessionId, pending)
+  assert.equal(f.headers.get(pending).agentPreset, IHOME_TEAM_PRESET_ID)
+  assert.equal(f.creates.length, 2)
+  assert.equal(new Set(f.creates.map(item => item.sessionId)).size, 1)
+  assert.equal(f.state().pendingSessionId, undefined)
+  await assert.rejects(restarted.open('invalid'), /请选择/)
+})
+
+test('an archived partially created reservation is never retried or revived', async t => {
+  const f = await fixture(t), manager = f.restart()
+  f.failCreate(true)
+  await assert.rejects(manager.open('tasks'), /storage offline/)
+  const pending = f.state().pendingSessionId
+  f.add(pending); f.archived.push(pending)
+  f.failCreate(false)
+  const result = await f.restart().open('tasks')
+  assert.notEqual(result.sessionId, pending)
+  assert.deepEqual(f.archived, [pending])
+})
+
+test('archive racing selection storage blocks navigation and remains authoritative', async t => {
+  const f = await fixture(t), current = f.add('current'), manager = f.restart()
+  f.onPut(value => { if (value.selectedModules.current) f.archived.push(current) })
+  await assert.rejects(manager.open('archive', current), /已归档/)
+  assert.deepEqual(f.archived, [current])
+  assert.equal(f.creates.length, 0)
+})
+
+test('workbench context follows the current selection and gives direct user requests priority', () => {
+  const state = { selectedModules: { chat: 'archive', tasks: 'tasks', quotes: 'quotes' } }
   assert.equal(moduleSessionPrompt(state, undefined), '')
-  assert.equal(moduleSessionPrompt(state, 'ordinary-session'), '')
-  assert.match(moduleSessionPrompt(state, 'archive-session'), /需求分析师/)
-  assert.match(moduleSessionPrompt(state, 'archive-session'), /家人和至少一个房间或区域/)
-  assert.equal(moduleSessionPrompt(state, 'archive-session', NEEDS_ANALYST_PRESET_ID), '')
-  state.sessions.archive.previousSessionIds = ['old-session']
-  assert.match(moduleSessionPrompt(state, 'old-session', 'standard'), /需求分析师/)
+  assert.equal(moduleSessionPrompt(state, 'missing'), '')
+  assert.match(moduleSessionPrompt(state, 'chat'), /「需求分析师」/)
+  assert.match(moduleSessionPrompt(state, 'chat'), /用户当前问题及 \/ 点名专家优先/)
+  state.selectedModules.chat = 'design'
+  assert.match(moduleSessionPrompt(state, 'chat'), /「户型设计师」/)
+  assert.doesNotMatch(moduleSessionPrompt(state, 'chat'), /「需求分析师」/)
+  assert.match(moduleSessionPrompt(state, 'tasks'), /ihome_propose_task/)
+  assert.match(moduleSessionPrompt(state, 'quotes'), /报价与合同/)
 })
 
-test('renamed roles and new move-in role receive their own conversation instructions', () => {
-  const state = { sessions: {
-    handover: { sessionId: 'inspection', ready: true },
-    movein: { sessionId: 'moving', ready: true },
-    budget: { sessionId: 'old-budget', ready: true },
-    documents: { sessionId: 'documents', ready: true },
-    tasks: { sessionId: 'task-chat', ready: true },
-  } }
-  assert.match(moduleSessionPrompt(state, 'inspection'), /「验收监理」/)
-  assert.match(moduleSessionPrompt(state, 'inspection'), /整改及复验/)
-  assert.match(moduleSessionPrompt(state, 'moving'), /「入住规划师」/)
-  assert.match(moduleSessionPrompt(state, 'moving'), /保洁、搬运、收纳/)
-  assert.match(moduleSessionPrompt(state, 'old-budget'), /「预算与记账」/)
-  assert.match(moduleSessionPrompt(state, 'documents'), /「文档资料员」/)
-  assert.match(moduleSessionPrompt(state, 'documents'), /各阶段产生的文档及物料资料/)
-  const tasks = moduleSessionPrompt(state, 'task-chat')
-  assert.match(tasks, /「任务待办助理」/)
-  assert.match(tasks, /ihome_read_tasks/)
-  assert.match(tasks, /ihome_propose_task/)
+test('host rejects legacy restore requests before opening and omits context from child agents', async t => {
+  const f = await fixture(t)
+  await mountIHomeWorkspace(f.ctx)
+  const route = f.routes.find(item => item.path.endsWith('/module-session'))
+  const response = await route.fetch(new Request('http://local/api/ihome/module-session', {
+    method: 'POST', body: JSON.stringify({ moduleId: 'archive', previousSessionId: 'archived' }) }))
+  assert.equal(response.status, 400)
+  assert.match((await response.json()).error, /会话列表/)
+  assert.equal(f.creates.length, 0)
+  await f.table.put('home', { selectedModules: { current: 'archive' } })
+  const header = { cwd: iHomeWorkspacePath(), agentPreset: IHOME_TEAM_PRESET_ID }
+  assert.match(f.prompts[0].text({ agent: { session: { id: 'current', header } } }), /需求分析师/)
+  assert.equal(f.prompts[0].text({ agent: { session: { id: 'current', header: { ...header, origin: 'subagent' } } } }), '')
 })
 
-test('upgrading separate expert conversations retains both histories and a user title', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'ihome-team-'))
-  try {
-    let stored = { sessions: {
-      archive: { sessionId: 'needs', ready: true, roleTitle: '需求分析师' },
-      design: { sessionId: 'old-design', ready: true, roleTitle: '户型设计师' },
-      tasks: { sessionId: 'old-tasks', ready: true, roleTitle: '任务待办助理', previousSessionIds: ['older-tasks'] },
-    } }
-    const headers = new Map([
-      ['needs', { id: 'needs', cwd: directory, agentPreset: NEEDS_ANALYST_PRESET_ID }],
-      ['old-design', { id: 'old-design', cwd: directory, agentPreset: 'standard' }],
-      ['old-tasks', { id: 'old-tasks', cwd: directory, agentPreset: 'standard' }],
-      ['older-tasks', { id: 'older-tasks', cwd: directory, agentPreset: 'standard' }],
-    ])
-    const names = new Map([['needs', '我家的装修计划'], ['old-tasks', '采购清单']])
-    const workspace = { id: 'w', path: directory, title: 'iHome工作区',
-      async attachSession() {}, async setTitle() {} }
-    const ctx = {
-      agentPresets: { defaultId: 'standard' },
-      workspaceRegistry: { create: async () => workspace, unarchiveSession: async () => {} },
-      sessions: { get: id => headers.has(id) ? { header: headers.get(id) } : undefined },
-      sessionPersistence: { stat: async () => undefined, flush: async () => {} },
-      sessionController: {
-        async create() { throw new Error('should reuse existing native conversation') },
-        async projections({ sessionId }) { return { kind: 'sequenced', values: {
-          title: names.get(sessionId), agentPreset: headers.get(sessionId).agentPreset,
-        } } },
-        async rename({ sessionId, title }) { names.set(sessionId, title) },
-      },
-    }
-    const table = { get: () => stored, put: async (_, value) => { stored = structuredClone(value) } }
-    let manager = createWorkspaceManager(ctx, table, directory)
-    const [tasks, needs] = await Promise.all([manager.open('tasks'), manager.open('archive')])
-    assert.equal((await manager.open('design')).sessionId, 'needs')
-    assert.equal((await manager.open('design', 'old-design')).sessionId, 'old-design')
-    assert.equal(tasks.sessionId, 'needs')
-    assert.equal(needs.sessionId, 'needs')
-    assert.deepEqual(tasks.previousSessionIds, ['old-tasks', 'older-tasks'])
-    assert.equal(names.get('needs'), '我家的装修计划')
-    assert.equal(names.get('old-tasks'), '采购清单')
-    manager = createWorkspaceManager(ctx, table, directory)
-    assert.equal((await manager.open('tasks', 'old-tasks')).activeSessionId, 'needs')
-    assert.equal((await manager.open('tasks', 'older-tasks')).sessionId, 'older-tasks')
-    assert.deepEqual((await manager.ensure()).moduleSessions, { archive: 'needs', tasks: 'needs', design: 'needs' })
-  } finally { await rm(directory, { recursive: true, force: true }) }
+
+test('a created session survives a failed selection save without duplicate creation', async t => {
+  const f = await fixture(t), manager = f.restart()
+  f.onPut(value => { if (value.lastSessionId) throw new Error('selection save failed') })
+  await assert.rejects(manager.open('archive'), /selection save failed/)
+  const pending = f.state().pendingSessionId
+  assert.ok(f.headers.has(pending))
+  f.onPut(() => {})
+  assert.equal((await f.restart().open('tasks')).sessionId, pending)
+  assert.equal(f.creates.length, 1)
 })
