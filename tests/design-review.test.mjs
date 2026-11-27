@@ -72,3 +72,18 @@ test('stairs use generated openings and only flag disconnected target room footp
   model.floors[1].items[0].x = 20
   assert.equal(reviewDesign(state, archive, {}).issues[0].kind, 'stair-landing')
 })
+
+test('review output is lossless JSON with optional archive fields and absent comparison versions', () => {
+  const { state, archive } = fixture()
+  archive.measurements.push({ id: 'measure', roomId: 'living', label: '净宽', value: 4000, unit: 'mm', source: '实测', date: '2026-11-27', adopted: true, attachmentId: undefined, quote: undefined })
+  // Unknown names can occur in stale input; the tool must still return a serializable diagnostic.
+  archive.needs[0].roomIds.push('removed-room')
+  archive.members[0].name = undefined
+  for (const args of [{}, { compareDesignId: state.activeId }, { versionId: state.designs[0].versions[0].id }]) {
+    const result = reviewDesign(state, archive, args)
+    assert.deepEqual(result, JSON.parse(JSON.stringify(result)))
+    assert.equal(Object.hasOwn(result.measurements[0], 'attachmentId'), false)
+    assert.equal(Object.hasOwn(result.needs[0].rooms[1], 'name'), false)
+    assert.equal(Object.hasOwn(result.needs[0].members[0], 'name'), false)
+  }
+})

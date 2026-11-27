@@ -79,7 +79,8 @@ export async function mountDesignTools(ctx: DesignToolsContext): Promise<void> {
         if (!selected) throw new Error('方案不存在。')
         const version = args.versionId === undefined ? undefined : selected.versions.find(item => item.id === args.versionId)
         if (args.versionId !== undefined && !version) throw new Error('版本不存在。')
-        return { revision: state.revision, activeId: state.activeId, designs: state.designs.map(item => ({ id: item.id, name: item.name, versions: item.versions.map(({ model: _model, ...metadata }) => metadata) })), designId: selected.id, name: selected.name, versionId: version?.id, model: version?.model ?? selected.model }
+        // Native DSH tool outputs must be lossless JSON, including optional nested geometry fields.
+        return JSON.parse(JSON.stringify({ revision: state.revision, activeId: state.activeId, designs: state.designs.map(item => ({ id: item.id, name: item.name, versions: item.versions.map(({ model: _model, ...metadata }) => metadata) })), designId: selected.id, name: selected.name, versionId: version?.id, model: version?.model ?? selected.model }))
       },
     }), register({ name: 'ihome_propose_design', description: '主会话提出设计操作，用户在对话接受后直接写入本机。先读最新 revision。create 可带完整 model；edit 只接受局部 operations 并保留未修改对象及附件。copy 复制方案或版本；snapshot 保存版本；activate 切换方案或恢复版本。字段详见 ihome-floorplan-modeling 技能。',
       parameters: { type: 'object', additionalProperties: false, required: ['action', 'expectedRevision'], properties: {

@@ -68,7 +68,7 @@ export function reviewDesign(state: DesignState, archive: Archive, raw: unknown)
   const current = metrics(selected.model)
   const comparison = args.compareDesignId !== undefined || args.compareVersionId !== undefined ? select(state, args.compareDesignId ?? selected.design.id, args.compareVersionId) : undefined
   const baseline = comparison ? metrics(comparison.model) : undefined
-  return {
+  const report = {
     revision: state.revision, archiveRevision: archive.revision, designId: selected.design.id, versionId: selected.version?.id,
     metrics: current, metricsNote: '面积为模型矩形房间占地之和，未扣除重叠及墙体，不是建筑面积；模型数量及长度不证明功能满足或施工合规。',
     needs, measurements: archive.measurements, issues,
@@ -77,6 +77,8 @@ export function reviewDesign(state: DesignState, archive: Archive, raw: unknown)
       objects: compareDesignModels(comparison.model, selected.model) } : undefined,
     limits: ['未自动验证承重、采光、消防、楼梯净高及通道净宽。', '几何问题为待核验线索，不能直接视为违规。', '请用需求编号、模型对象编号与尺寸来源逐项说明满足、冲突或未知，并给出可测量的下一步。'],
   }
+  // Remove absent optional properties at the tool boundary, including nested archive records.
+  return JSON.parse(JSON.stringify(report)) as typeof report
 }
 
 export async function prepareDesignDecision(state: DesignState, archive: Archive, raw: unknown): Promise<{ next: Archive, decision: Decision, summary: string }> {

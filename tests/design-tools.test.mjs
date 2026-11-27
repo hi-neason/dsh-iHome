@@ -50,3 +50,15 @@ test('stale, foreign and subagent requests cannot prompt or write; cancellation 
   await assert.rejects(cancelled.tools.ihome_propose_design.execute(args, { ...execution(), signal: controller.signal }))
   assert.equal(cancelled.writes(), 0)
 })
+
+test('read model returns lossless JSON for current and saved versions', async () => {
+  const f = await fixture()
+  const current = await f.tools.ihome_read_design.execute({}, execution())
+  assert.deepEqual(current, JSON.parse(JSON.stringify(current)))
+  assert.equal(Object.hasOwn(current, 'versionId'), false)
+  await f.tools.ihome_propose_design.execute({ action: 'snapshot', expectedRevision: 0 }, execution())
+  const versionId = f.state().designs[0].versions[0].id
+  const version = await f.tools.ihome_read_design.execute({ versionId }, execution())
+  assert.equal(version.versionId, versionId)
+  assert.deepEqual(version, JSON.parse(JSON.stringify(version)))
+})
