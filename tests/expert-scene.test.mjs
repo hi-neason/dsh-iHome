@@ -5,7 +5,7 @@ import { stages } from '../src/modules.ts'
 
 test('each visible expert has one figure whose pose depends only on scene time', () => {
   const { group, animate } = createExpertCrew()
-  const expected = [...stages.flatMap(stage => stage.agentIds), 'knowledge', 'documents', 'tasks']
+  const expected = [...stages.flatMap(stage => stage.agentIds), 'knowledge', 'documents', 'tasks', 'budget']
   assert.deepEqual(group.children.map(node => node.userData.expertId).sort(), expected.sort())
 
   const poseAt = time => {

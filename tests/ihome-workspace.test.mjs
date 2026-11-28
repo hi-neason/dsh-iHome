@@ -51,7 +51,7 @@ async function fixture(t, initial) {
 test('all experts can share the current ordinary session without changing its title or preset', async t => {
   const f = await fixture(t), current = f.add('manually-created')
   const manager = f.restart()
-  for (const role of ['archive', 'tasks', 'design', 'knowledge', 'quotes', 'documents']) {
+  for (const role of ['archive', 'tasks', 'design', 'knowledge', 'quotes', 'documents', 'budget', 'fengshui']) {
     assert.equal((await manager.open(role, current)).sessionId, current)
     assert.equal(f.state().selectedModules[current], role)
   }
@@ -153,6 +153,10 @@ test('workbench context follows the current selection and gives direct user requ
   assert.doesNotMatch(moduleSessionPrompt(state, 'chat'), /「需求分析师」/)
   assert.match(moduleSessionPrompt(state, 'tasks'), /ihome_propose_task/)
   assert.match(moduleSessionPrompt(state, 'quotes'), /报价与合同[\s\S]*ihome_read_quotes[\s\S]*ihome_propose_quote/)
+  state.selectedModules.chat = 'budget'
+  assert.match(moduleSessionPrompt(state, 'chat'), /「财务经费专员」[\s\S]*ihome_read_expenses[\s\S]*ihome_propose_expense/)
+  state.selectedModules.chat = 'fengshui'
+  assert.match(moduleSessionPrompt(state, 'chat'), /「风水大师」[\s\S]*ihome_read_design/)
 })
 
 test('host rejects legacy restore requests before opening and omits context from child agents', async t => {

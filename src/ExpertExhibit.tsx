@@ -34,10 +34,10 @@ export function ExpertExhibit({ onOpen }: { onOpen: (id: ModuleId) => Promise<vo
       {error && <p role="alert">{error}</p>}
     </div>
     <div className="ih-studio" data-ready={ready}>
-      {!ready && <img className="ih-studio-poster" src={poster} alt="十位装修专家所在的微缩工作室" />}
-      <canvas ref={canvas} className="ih-studio-canvas" role="img" aria-label="三维装修工作室，十位专家正在查看图纸、比选材料、检查现场和安排任务" />
+      {!ready && <img className="ih-studio-poster" src={poster} alt="十二位装修专家所在的微缩工作室" />}
+      <canvas ref={canvas} className="ih-studio-canvas" role="img" aria-label="三维装修工作室，十二位专家正在查看图纸、比选材料、检查现场和安排任务" />
       <div className="ih-expert-pins" ref={pins} hidden={!ready}>
-        {modules.filter(role => role.id !== 'budget').map(role =>
+        {modules.map(role =>
           <button type="button" key={role.id} data-expert={role.id} aria-label={'与' + role.title + '对话'}
             onClick={() => void openExpert(role.id)}><span>{role.title} ↗</span></button>)}
       </div>

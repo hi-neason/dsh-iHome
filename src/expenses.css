@@ -1,0 +1,25 @@
+.ih-expenses { font-size: 13px; font-variant-numeric: tabular-nums; }
+.ih-expense-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ih-expenses h2, .ih-expense-compose label { margin: 0; font-size: 15px; font-weight: 600; }
+.ih-expenses :is(select, button, input) { font: inherit; background: var(--ih-surface); color: var(--ih-ink); border: 1px solid var(--ih-line); border-radius: 7px; padding: 7px 10px; }
+.ih-expenses :is(select, button) { cursor: pointer; }
+.ih-expenses :is(input, select):focus-visible { outline: 2px solid var(--ih-ink); outline-offset: 2px; }
+.ih-expenses :is(dt, small, .ih-expense-empty) { color: var(--ih-muted); }
+.ih-expense-totals { display: flex; flex-wrap: wrap; gap: 14px 24px; margin: 12px 0 18px; padding: 18px; border: 1px solid var(--ih-line); border-radius: 10px; background: var(--ih-soft); }
+.ih-expense-totals > div:first-child { flex-basis: 100%; }
+.ih-expense-totals dt { font-size: 12px; }
+.ih-expense-totals dd { margin: 2px 0 0; font-size: 16px; }
+.ih-expense-totals > div:first-child dd { font-size: clamp(28px, 7cqi, 40px); line-height: 1.2; letter-spacing: -.045em; }
+.ih-expense-compose { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-top: 16px; }
+.ih-expense-compose label { grid-column: 1 / -1; }
+.ih-expense-compose input { min-width: 0; }
+.ih-expenses .ih-expense-primary { background: var(--ih-ink); color: var(--ih-bg); border-color: var(--ih-ink); }
+.ih-expenses button:disabled { opacity: .5; cursor: default; }
+.ih-expense-actions { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 6px 0 24px; }
+.ih-expense-actions button { background: transparent; border: 0; padding: 6px 0; color: var(--ih-muted); }
+.ih-expense-actions button:hover { color: var(--ih-ink); text-decoration: underline; }
+.ih-expense-list { margin: 8px 0; padding: 0; list-style: none; }
+.ih-expense-list li { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 12px 0; border-top: 1px solid var(--ih-line); }
+.ih-expense-list small { display: block; margin-top: 3px; }
+.ih-expense-amount { text-align: end; }
+.ih-expense-empty { padding-block: 10px; }

@@ -6,7 +6,7 @@ import detailCss from './module-detail.css'
 import knowledgeCss from './knowledge.css'
 
 interface ModuleDetailProps {
-  id: Exclude<ModuleId, 'archive' | 'documents' | 'tasks' | 'quotes'> | null
+  id: Exclude<ModuleId, 'archive' | 'documents' | 'tasks' | 'quotes' | 'budget'> | null
   onAsk: (prompt: string) => void
 }
 
@@ -16,7 +16,7 @@ interface ModuleContent {
   tasks: { title: string, description: string, prompt: string }[]
 }
 
-const content: Record<Exclude<ModuleId, 'knowledge' | 'design' | 'archive' | 'documents' | 'tasks' | 'quotes'>, ModuleContent> = {
+const content: Record<Exclude<ModuleDetailProps['id'], 'knowledge' | 'design' | null>, ModuleContent> = {
   materials: {
     intro: '先确认安装条件，再比较型号与价格。把采购时间和施工节点一起考虑。',
     checklist: ['记录候选产品的准确品牌、型号、规格和报价日期。', '核对尺寸、开孔、用电、给排水及安装预留要求。', '确认报价包含的配件、运输、安装和售后范围。', '结合现场工序，约定下单、到货、验货和安装时间。'],
@@ -25,12 +25,12 @@ const content: Record<Exclude<ModuleId, 'knowledge' | 'design' | 'archive' | 'do
       { title: '安排采购清单', description: '把待购物品接到施工计划上。', prompt: '请先了解我的装修进度、设计方案和已购物品，再按房间整理待采购清单，标记需要提前确认的设备尺寸、水电预留、交付周期和安装前置条件。' },
     ],
   },
-  budget: {
-    intro: '分别记清已签合同、预计增减项和实际付款，才能看见还需要准备多少钱。',
-    checklist: ['明确总预算覆盖的范围及可接受的预备金。', '收集合同金额、报价和已确认增减项。', '按收款方、日期、用途整理付款凭证。', '记录尚未采购的项目和接下来的付款节点。'],
+  fengshui: {
+    intro: '从传统住宅风水的角度读户型，聊聊家人在意的讲究，再一起看哪些摆法住起来也舒服。',
+    checklist: ['准备户型图，或描述门窗和家具的位置。', '若想讨论方位，标出指北方向和入户门。', '列出家人在意的习俗，以及想保留的布局。'],
     tasks: [
-      { title: '分配第一版装修预算', description: '按实际范围拆分施工、设备与软装。', prompt: '请帮我制定第一版装修预算。先询问总预算、房屋面积、改造范围、承包方式、设备及家具需求。区分已知报价和估算，按类别分配预算与预备金，并核对总额。' },
-      { title: '整理支出与待付款', description: '核对实付、合同余额及后续开销。', prompt: '请帮我整理装修支出。先询问合同、确认的增减项、付款凭证与待购物品，生成合同额、变更额、已付款、未付款和预计支出的对账表。避免把合同与付款重复相加，无法核实的金额单独列出。' },
+      { title: '看户型风水', description: '结合入户、客厅与卧室，逐处聊传统讲究和使用感受。', prompt: '/风水大师 请结合当前户型或我附的图，从传统住宅风水角度看看入户、客厅和卧室。请标出对应位置，说明传统说法、对实际居住的影响和可选的调整。' },
+      { title: '比较两种摆法', description: '比较床、沙发或屏风的位置，兼顾家人习俗与日常动线。', prompt: '/风水大师 我想比较两种家具摆法。请先问我是哪件家具、两个位置和家人在意的讲究，再帮我比较隐私、采光、通行和调整成本。' },
     ],
   },
   site: {

@@ -147,3 +147,13 @@ test('image-only designer selection starts modeling while other empty expert sel
   await f.step([other])
   assert.equal(f.calls.length, 1)
 })
+
+
+test('explicit finance and fengshui requests dispatch with their named identities', async () => {
+  const f = fixture()
+  await f.step([message('finance', '/财务经费专员 记录今天的设计费'), message('fengshui', '/风水大师 看看入户布局')])
+  assert.deepEqual(f.calls.map(call => call.provider), ['ihome-finance-expert', 'ihome-fengshui-expert'])
+  assert.deepEqual(f.calls.map(call => call.label), ['财务经费专员', '风水大师'])
+  assert.deepEqual(parseExpertRequest('/财务经费专员 记录设计费'), { expert: 'ihome-finance-specialist', task: '记录设计费' })
+  assert.deepEqual(parseExpertRequest('/风水大师\n看看朝向'), { expert: 'ihome-fengshui-master', task: '看看朝向' })
+})

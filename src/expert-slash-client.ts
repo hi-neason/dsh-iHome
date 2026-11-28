@@ -41,6 +41,8 @@ const experts = [
   { name: '户型设计师', key: 'design', aliases: ['design', 'floorplan', 'layout', 'huxing'] },
   { name: '选商核价分析师', key: 'quotes', aliases: ['报价', '装修公司', '比价', '合同', 'quotes', 'vendor', 'contractor', 'pricing', 'xuanshang', 'hejia'] },
   { name: '任务待办助理', key: 'tasks', aliases: ['tasks', 'todo', 'calendar', 'renwu'] },
+  { name: '财务经费专员', key: 'finance', aliases: ['财务', '经费', '记账', '支出', '预算', 'finance', 'budget', 'expenses', 'caiwu'] },
+  { name: '风水大师', key: 'fengshui', aliases: ['风水', '国学', '朝向', 'fengshui', 'geomancy'] },
 ] as const
 
 function matches(query: string, value: string): boolean {

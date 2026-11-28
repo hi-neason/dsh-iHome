@@ -7,6 +7,7 @@ import { mountDesigns, type DesignHostContext } from './design-host'
 import type { QuoteSourceHost } from './quote-source-host'
 import { mountQuotes, type QuoteHostContext } from './quote-host'
 import { mountTasks, type TaskHostContext } from './task-host'
+import { mountExpenses, type ExpenseHostContext } from './expense-host'
 import { mountAgentSettings, type AgentSettingsHostContext } from './agent-settings-host'
 import { mountExpertRequests, type ExpertRequestContext } from './expert-request'
 import { mountExpertDispatch, type ExpertDispatchContext } from './expert-dispatch'
@@ -14,9 +15,10 @@ import { mountExpertDispatch, type ExpertDispatchContext } from './expert-dispat
 export const name = 'ihome'
 export const inject = ['storageDomain', 'connection', 'attachments', 'tools', 'userQuestions', 'workspaceRegistry', 'sessionController', 'sessionPersistence', 'sessions', 'systemPrompt', 'agentPresets', 'subagents']
 
-export async function apply(ctx: QuoteSourceHost & QuoteHostContext & ArchiveHostContext & WorkspaceHostContext & TaskHostContext & AgentSettingsHostContext & ExpertDispatchContext & ExpertRequestContext & DesignHostContext & DesignToolsContext & MediaHost): Promise<void> {
+export async function apply(ctx: QuoteSourceHost & QuoteHostContext & ArchiveHostContext & WorkspaceHostContext & TaskHostContext & ExpenseHostContext & AgentSettingsHostContext & ExpertDispatchContext & ExpertRequestContext & DesignHostContext & DesignToolsContext & MediaHost): Promise<void> {
   await mountArchive(ctx)
   await mountTasks(ctx)
+  await mountExpenses(ctx)
   await mountQuotes(ctx)
   await mountDesigns(ctx)
   await mountDesignMedia(ctx)

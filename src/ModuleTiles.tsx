@@ -3,18 +3,23 @@ import { modules, stages, type ModuleId } from './modules'
 import portraits from './assets/team/portraits.webp'
 import documentPortrait from './assets/team/documents.webp'
 import taskPortrait from './assets/team/tasks.webp'
+import financePortrait from './assets/team/finance.webp'
+import fengshuiPortrait from './assets/team/fengshui.webp'
 import directoryCss from './expert-directory.css'
 
 export type OpenModule = (id: ModuleId) => Promise<void>
-type AgentId = Exclude<ModuleId, 'budget'>
+type AgentId = ModuleId
 
 const portraitOrder = ['archive', 'design', 'quotes', 'materials', 'site', 'handover', 'movein', 'knowledge'] as const
-const generalAgents = ['knowledge', 'documents', 'tasks'] as const
+const generalAgents = ['knowledge', 'documents', 'tasks', 'budget'] as const
+const standalonePortraits: Partial<Record<AgentId, string>> = {
+  documents: documentPortrait, tasks: taskPortrait, budget: financePortrait, fengshui: fengshuiPortrait,
+}
 
 export function AgentPortrait({ id }: { id: AgentId }) {
-  const standalone = id === 'documents' || id === 'tasks'
-  const portrait = id === 'tasks' ? taskPortrait : documentPortrait
-  const index = standalone ? 0 : portraitOrder.indexOf(id)
+  const portrait = standalonePortraits[id]
+  const standalone = Boolean(portrait)
+  const index = portraitOrder.findIndex(role => role === id)
   const style: CSSProperties = {
     backgroundImage: 'url(' + (standalone ? portrait : portraits) + ')',
     backgroundSize: standalone ? 'cover' : '400% 200%',

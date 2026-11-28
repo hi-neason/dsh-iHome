@@ -6,6 +6,7 @@ import { CompanyAssessmentPanel } from './CompanyAssessment'
 import { VendorResearch } from './VendorResearch'
 import { QuoteWorkbench } from './QuoteWorkbench'
 import { TaskWorkbench } from './TaskWorkbench'
+import { ExpenseWorkbench } from './ExpenseWorkbench'
 import type { TaskService } from './task-client'
 import { DesignWorkbench } from './DesignWorkbench'
 import { ModuleDetail } from './ModuleDetail'
@@ -33,7 +34,7 @@ export function ModuleWorkbench({ id, archiveService, taskService, onAsk, onOpen
     <style>{homeCss}</style>
     <div className="ih-workbench-page">
       <header className="ih-workbench-header">
-        {!showDirectory && module && module.id !== 'budget' && <AgentPortrait id={module.id} />}
+        {!showDirectory && module && <AgentPortrait id={module.id} />}
         <h1>{showDirectory ? '我的装修专家团' : module.title}</h1>
         {module && <button type="button" onClick={() => setChoosing(!choosing)}>
           {choosing ? '返回' + module.title : '切换专家'}
@@ -51,6 +52,7 @@ export function ModuleWorkbench({ id, archiveService, taskService, onAsk, onOpen
           renderCompanyAudit={ctx => <CompanyAssessmentPanel {...ctx}/>}
           renderCompanyReputation={ctx => <VendorResearch {...ctx}/>} />
         : id === 'tasks' ? <TaskWorkbench service={taskService} onAsk={onAsk} />
+        : id === 'budget' ? <ExpenseWorkbench onAsk={onAsk} />
         : <ModuleDetail key={id} id={id} onAsk={onAsk} />}
     </div>
   </section>

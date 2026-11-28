@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 
 import type { ModuleId } from './modules'
 
-type ExpertId = Exclude<ModuleId, 'budget'>
+type ExpertId = ModuleId
 interface Expert {
   id: ExpertId
   x: number
@@ -27,6 +27,8 @@ const experts: Expert[] = [
   { id: 'movein', x: 3.4, z: 1.4, coat: 0xe8d5b6, hair: 0x49362e, skin: 0xe4b28d, turn: -.28, longHair: true },
   { id: 'knowledge', x: 4.6, z: -1.1, coat: 0x68766a, hair: 0x8b8476, skin: 0xd7ab87, turn: -.28, glasses: true },
   { id: 'tasks', x: .9, z: 2.15, coat: 0xb47c56, hair: 0x49352e, skin: 0xe3b598, turn: -.12, longHair: true },
+  { id: 'budget', x: -3.1, z: 1.9, coat: 0x486b73, hair: 0x302c2a, skin: 0xe3b797, turn: .15, glasses: true },
+  { id: 'fengshui', x: -5.65, z: -.55, coat: 0x786a57, hair: 0x9b9589, skin: 0xd6ad8e, turn: .28 },
   { id: 'documents', x: 5.1, z: 1.15, coat: 0x596b86, hair: 0x37302c, skin: 0xe0b28b, turn: -.35, glasses: true },
 ]
 
@@ -182,6 +184,22 @@ export function createExpertCrew(): { group: THREE.Group, animate(timeSeconds: n
             .045 - Math.floor(day / 3) * .075, .065, .055, .045, .018)
         }
         break
+      case 'budget':
+        book(prop, 0x324e59, .32, .4)
+        box(prop, 0x96c1b9, 0, .1, .065, .24, .09, .018)
+        for (let key = 0; key < 12; key++) box(prop, key === 11 ? 0xcfa460 : 0xeee3cc, -.09 + key % 3 * .09, .015 - Math.floor(key / 3) * .055, .065, .055, .035, .018)
+        break
+      case 'fengshui': {
+        const compass = part(prop, cylinder, 0xb9914e, [0, 0, 0], [.2, .06, .2])
+        compass.rotation.x = Math.PI / 2
+        part(prop, ring, 0x705238, [0, 0, .038], [.155, .155, .055])
+        part(prop, ring, 0x705238, [0, 0, .04], [.095, .095, .055])
+        box(prop, 0xf3e4b7, 0, 0, .052, .013, .27, .012)
+        box(prop, 0xa64b3c, 0, .045, .065, .025, .09, .012)
+        prop.position.x = -.12
+        arms[0].rotation.x = -.8
+        break
+      }
       case 'documents':
         book(prop, 0x95a5b6, .31, .36)
         prop.position.x = -.1
@@ -242,6 +260,8 @@ export function createExpertCrew(): { group: THREE.Group, animate(timeSeconds: n
         case 'quotes':
         case 'knowledge':
         case 'tasks':
+        case 'budget':
+        case 'fengshui':
           head.rotation.x += gesture * .33
           arms[1].rotation.x -= gesture * .32
           break

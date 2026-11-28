@@ -1,15 +1,15 @@
 ---
 name: ihome-team-coordination
-description: 在同一主对话中调度需求分析师、户型设计师、选商核价分析师与任务待办助理，汇总结果并确认本地数据修改。
+description: 在同一主对话中调度需求分析师、户型设计师、选商核价分析师、任务待办助理、财务经费专员与风水大师，汇总结果并确认本地数据修改。
 ---
 
 # 专家协作与确认
 
-1. 识别用户点名的专家及问题范围。需求、家人、空间或生活冲突交给需求分析师；布局、读图、平面或3D建模交给户型设计师；选择装修团队、报价复算和签约核查交给选商核价分析师；任务、排期、日历或完成情况交给任务待办助理。
-2. 调用 ihome_consult_expert。expert 填 ihome-needs-analyst、ihome-floorplan-designer、ihome-quotes-analyst 或 ihome-task-assistant，task 写清要解决的问题，context 提供相关用户原话、已明确事实、当前日期和时区。子专家拥有独立上下文，不能假设它看到完整主对话。
+1. 识别用户点名的专家及问题范围。需求、家人、空间或生活冲突交给需求分析师；布局、读图、平面或3D建模交给户型设计师；选择装修团队、报价复算和签约核查交给选商核价分析师；任务、排期、日历或完成情况交给任务待办助理；各阶段付款、退款、记账及预算分析交给财务经费专员；传统国学、住宅风水和陈设习惯交给风水大师。
+2. 调用 ihome_consult_expert。expert 填 ihome-needs-analyst、ihome-floorplan-designer、ihome-quotes-analyst、ihome-task-assistant、ihome-finance-specialist 或 ihome-fengshui-master，task 写清要解决的问题，context 提供相关用户原话、已明确事实、当前日期和时区。子专家拥有独立上下文，不能假设它看到完整主对话。
 3. 跨领域问题按依赖关系调度。例如先让需求分析师澄清老人夜间照明需求，再让任务待办助理整理需要业主落实的事项。仅传递完成当前委派所需的上下文。
 4. 检查返回状态。完成时标明是哪位专家的建议，保留不确定性和待澄清问题。错误、取消或空结果如实说明，不能将未完成的委派描述为专家结论。
-5. 在主对话中询问待澄清问题。用户要求修改数据时，重新读取对应数据，使用最新版本。需求使用 ihome_propose_need，事实或尺寸使用 ihome_propose_record，任务使用 ihome_propose_task。选商先读 ihome_read_quotes，按专家查证的原件、版本和业主选择，用 ihome_propose_quote 展示本次拟保存记录，接受后生效。复报价保留为新版本。设计先用 ihome_read_design 读取方案和 revision，再用 ihome_propose_design 创建方案或局部修改。已有方案采用 edit 操作，保留无关对象和参考资料；新建独立命名副本使用 copy。家人、空间与装修决定的独立编辑仍使用工作台。
+5. 在主对话中询问待澄清问题。用户要求修改数据时，重新读取对应数据，使用最新版本。需求使用 ihome_propose_need，事实或尺寸使用 ihome_propose_record，任务使用 ihome_propose_task。账务先读 ihome_read_expenses，以最新 revision 作为 expectedRevision，用 ihome_propose_expense 确认付款、退款、更新或删除。每笔新交易使用稳定唯一 expenseId，重试沿用；amountCents 为正整数分，kind 区分 payment/refund。选商先读 ihome_read_quotes，按专家查证的原件、版本和业主选择，用 ihome_propose_quote 展示本次拟保存记录，接受后生效。复报价保留为新版本。设计先用 ihome_read_design 读取方案和 revision，再用 ihome_propose_design 创建方案或局部修改。已有方案采用 edit 操作，保留无关对象和参考资料；新建独立命名副本使用 copy。家人、空间与装修决定的独立编辑仍使用工作台。
 6. 每次确认展示具体变更。用户接受且工具返回 applied 才说明保存成功；拒绝或取消后保持原数据，冲突时重新读取并核对。多个变更分别确认，不把专家给出的建议视为用户接受。
 7. 需求和任务分别管理。将需求衍生为待办时说明具体行动及日期依据，未知日期保持未排期。主 Agent 负责结果整合与落盘，不让内部专家发起用户确认或递归委派。
 
